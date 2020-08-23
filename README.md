@@ -2,7 +2,9 @@
 
 ## Plugin Compatibility
 
-This plugin's code may run before other plugins that spawn cars. It is recommended that other plugins either be resilient to the presence of existing engine parts and fuel, or alternatively use hooks to prevent this plugin from affecting specific cars.
+This plugin may affect cars spawned by other plugins. It is recommended that other plugins be resilient to the presence of existing engine parts and fuel (in case this plugin adds them first), and to use the `CanBootstrapSpawnedCar` hook to prevent this plugin from affecting specific cars if desired.
+
+If another plugin updates a car's fuel or engine parts before this plugin, it will only add fuel if missing, and only add engine parts to empty slots.
 
 - [Craft Car Chassis](https://umod.org/plugins/craft-car-chassis)
   - The chassis is ignored by this plugin, meaning it is not given fuel, unless you configure this plugin with `IncludeChassis: true`.
@@ -36,7 +38,10 @@ Default configuration:
 
 #### CanBootstrapSpawnedCar
 
-- Called on the next tick after a modular car is spawned. This is delayed to give other plugins time to save a reference to the car in case they want to check it in the hook method.
+- Called at least 100ms after a modular car is spawned. This delay is partly a requirement so that vehicle modules have time to spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
+- Not called if either of the following are true:
+  - The car was spawned as a chassis and the plugin is configured with `IncludeChassis: false`.
+  - The car has an `OwnerID` set and the plugin is configured with `IncludeOwnedCars: false`.
 - Returning `false` will prevent this plugin from altering health, fuel or engine parts.
 - Returning `null` will result in the default behavior.
 

@@ -4,7 +4,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "1.0.0")]
+    [Info("Car Spawn Settings", "WhiteThunder", "1.0.1")]
     [Description("Allows modular cars to spawn with configurable health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -26,7 +26,7 @@ namespace Oxide.Plugins
             if (Rust.Application.isLoadingSave) return;
             if (!PluginConfig.IncludeChassis && !car.spawnSettings.useSpawnSettings) return;
 
-            NextTick(() =>
+            timer.Once(0.1f, () =>
             {
                 if (car == null) return;
                 if (!PluginConfig.IncludeOwnedCars && car.OwnerID != 0) return;
@@ -48,12 +48,12 @@ namespace Oxide.Plugins
         
         private void BootstrapAfterModules(ModularCar car)
         {
-            MaybeRepair(car);
             MaybeAddFuel(car);
+            MaybeRepairModules(car);
             MaybeAddEngineParts(car);
         }
 
-        private void MaybeRepair(ModularCar car)
+        private void MaybeRepairModules(ModularCar car)
         {
             var healthPercentage = PluginConfig.HealthPercentage;
             if (healthPercentage < 0 || healthPercentage > 100) return;
@@ -80,14 +80,7 @@ namespace Oxide.Plugins
 
             var fuelItem = fuelContainer.inventory.FindItemByItemID(fuelContainer.allowedItem.itemid);
             if (fuelItem == null)
-            {
                 fuelContainer.inventory.AddItem(fuelContainer.allowedItem, fuelAmount);
-            }
-            else if (fuelItem.amount < fuelAmount)
-            {
-                fuelItem.amount = fuelAmount;
-                fuelItem.MarkDirty();
-            }
         }
 
         private void MaybeAddEngineParts(ModularCar car)
