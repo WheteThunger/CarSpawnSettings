@@ -4,7 +4,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "1.0.1")]
+    [Info("Car Spawn Settings", "WhiteThunder", "1.0.2")]
     [Description("Allows modular cars to spawn with configurable health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -59,13 +59,19 @@ namespace Oxide.Plugins
             if (healthPercentage < 0 || healthPercentage > 100) return;
             healthPercentage /= 100;
 
-            car.SetHealth(car.MaxHealth() * healthPercentage);
-            car.SendNetworkUpdate();
+            if (car.Health() < car.MaxHealth() * healthPercentage)
+            {
+                car.SetHealth(car.MaxHealth() * healthPercentage);
+                car.SendNetworkUpdate();
+            }
 
             foreach (var module in car.AttachedModuleEntities)
             {
-                module.SetHealth(module.MaxHealth() * healthPercentage);
-                module.SendNetworkUpdate();
+                if (module.Health() < module.MaxHealth() * healthPercentage)
+                {
+                    module.SetHealth(module.MaxHealth() * healthPercentage);
+                    module.SendNetworkUpdate();
+                }
             }
         }
 
