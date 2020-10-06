@@ -4,7 +4,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "1.0.2")]
+    [Info("Car Spawn Settings", "WhiteThunder", "1.0.3")]
     [Description("Allows modular cars to spawn with configurable health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -26,7 +26,7 @@ namespace Oxide.Plugins
             if (Rust.Application.isLoadingSave) return;
             if (!PluginConfig.IncludeChassis && !car.spawnSettings.useSpawnSettings) return;
 
-            timer.Once(0.1f, () =>
+            timer.Once(0.5f, () =>
             {
                 if (car == null) return;
                 if (!PluginConfig.IncludeOwnedCars && car.OwnerID != 0) return;

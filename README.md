@@ -35,7 +35,7 @@ Default configuration:
 
 #### CanBootstrapSpawnedCar
 
-- Called at least 100ms after a modular car is spawned. This delay is partly a requirement so that vehicle modules have time to spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
+- Called at least 0.5 seconds after a modular car is spawned. This delay is partly a requirement so that vehicle modules have time to spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
 - Not called if this plugin ignores the car for either of the following reasons.
   - The car was spawned as a chassis and the plugin is configured with `IncludeChassis: false`.
   - The car has an `OwnerID` set and the plugin is configured with `IncludeOwnedCars: false`.
