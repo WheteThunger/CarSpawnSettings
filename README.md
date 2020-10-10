@@ -1,4 +1,4 @@
-**Car Spawn Settings** allows modular cars to spawn with configurable health, fuel, and engine parts.
+**Car Spawn Settings** allows modular cars to spawn with configurable health, fuel, and engine parts. This only affects cars that spawn after the plugin loads, not existing cars.
 
 ## Plugin Compatibility
 
