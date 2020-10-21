@@ -45,7 +45,7 @@ namespace Oxide.Plugins
             object hookResult = Interface.CallHook("CanBootstrapSpawnedCar", car);
             return hookResult is bool && (bool)hookResult == false;
         }
-        
+
         private void BootstrapAfterModules(ModularCar car)
         {
             MaybeAddFuel(car);
@@ -77,7 +77,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddFuel(ModularCar car)
         {
-            var fuelAmount = PluginConfig.FuelAmount;
+            var fuelAmount = PluginConfig.GetPossiblyRandomFuelAmount();
             if (fuelAmount == 0) return;
 
             var fuelContainer = car.fuelSystem.GetFuelContainer();
@@ -91,8 +91,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddEngineParts(ModularCar car)
         {
-            var enginePartsTier = PluginConfig.EnginePartsTier;
-            if (enginePartsTier < 1 || enginePartsTier > 3) return;
+            if (!PluginConfig.CanHaveEngineParts()) return;
 
             foreach (var module in car.AttachedModuleEntities)
             {
@@ -102,14 +101,14 @@ namespace Oxide.Plugins
                     var engineStorage = engineModule.GetContainer() as EngineStorage;
                     if (engineStorage != null)
                     {
-                        AddPartsToEngineStorage(engineStorage, enginePartsTier);
+                        AddPartsToEngineStorage(engineStorage);
                         engineModule.RefreshPerformanceStats(engineStorage);
                     }
                 }
             }
         }
 
-        private void AddPartsToEngineStorage(EngineStorage engineStorage, int desiredTier)
+        private void AddPartsToEngineStorage(EngineStorage engineStorage)
         {
             if (engineStorage.inventory == null) return;
 
@@ -118,8 +117,11 @@ namespace Oxide.Plugins
             {
                 // Do nothing if there is an existing engine part
                 var item = inventory.GetSlot(i);
-                if (item == null)
-                    TryAddEngineItem(engineStorage, i, desiredTier);
+                if (item != null) continue;
+
+                var tier = PluginConfig.GetPossiblyRandomEnginePartTier();
+                if (tier > 0)
+                    TryAddEngineItem(engineStorage, i, tier);
             }
         }
 
@@ -131,10 +133,9 @@ namespace Oxide.Plugins
             var component = output.GetComponent<ItemDefinition>();
             var item = ItemManager.Create(component);
             if (item == null) return false;
-
-            item.condition = component.condition.max;
+            
+            item.conditionNormalized = PluginConfig.GetRandomNormalizedCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
-
             return true;
         }
 
@@ -146,11 +147,32 @@ namespace Oxide.Plugins
 
         internal class CarSpawnSettingsConfig
         {
-            [JsonProperty("EnginePartsTier")]
+            [JsonProperty("EnginePartsTier", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int EnginePartsTier = 0;
 
-            [JsonProperty("FuelAmount")]
+            [JsonProperty("EnginePartsTier1Chance")]
+            public int EnginePartsTier1Chance = 0;
+
+            [JsonProperty("EnginePartsTier2Chance")]
+            public int EnginePartsTier2Chance = 0;
+
+            [JsonProperty("EnginePartsTier3Chance")]
+            public int EnginePartsTier3Chance = 0;
+
+            [JsonProperty("EnginePartMinConditionPercent")]
+            public float EnginePartMinConditionPercent = 100.0f;
+
+            [JsonProperty("EnginePartMaxConditionPercent")]
+            public float EnginePartMaxConditionPercent = 100.0f;
+
+            [JsonProperty("FuelAmount", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int FuelAmount = 0;
+
+            [JsonProperty("MinFuelAmount")]
+            public int MinFuelAmount = 0;
+
+            [JsonProperty("MaxFuelAmount")]
+            public int MaxFuelAmount = 0;
 
             [JsonProperty("HealthPercentage")]
             public float HealthPercentage = -1;
@@ -160,6 +182,41 @@ namespace Oxide.Plugins
 
             [JsonProperty("IncludeOwnedCars")]
             public bool IncludeOwnedCars = false;
+
+            public bool CanHaveEngineParts() =>
+                EnginePartsTier > 0 || EnginePartsTier1Chance > 0 || EnginePartsTier2Chance > 0 || EnginePartsTier3Chance > 0;
+
+            public int GetPossiblyRandomEnginePartTier()
+            {
+                if (EnginePartsTier != 0)
+                    return EnginePartsTier;
+
+                var tierRoll = UnityEngine.Random.Range(0, 100);
+                if (tierRoll < EnginePartsTier3Chance)
+                    return 3;
+                else if (tierRoll < EnginePartsTier2Chance)
+                    return 2;
+                else if (tierRoll < EnginePartsTier1Chance)
+                    return 1;
+                else
+                    return 0;
+            }
+
+            public float GetRandomNormalizedCondition() =>
+                EnginePartMinConditionPercent == 100f
+                ? 1.0f
+                : UnityEngine.Mathf.Round(UnityEngine.Random.Range(EnginePartMinConditionPercent, EnginePartMaxConditionPercent)) / 100f;
+
+            public int GetPossiblyRandomFuelAmount()
+            {
+                if (FuelAmount != 0)
+                    return FuelAmount;
+
+                if (MinFuelAmount == 0 && MaxFuelAmount == 0)
+                    return 0;
+
+                return UnityEngine.Random.Range(MinFuelAmount, MaxFuelAmount + 1);
+            }
         }
 
         #endregion
