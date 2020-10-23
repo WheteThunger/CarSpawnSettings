@@ -79,18 +79,18 @@ namespace Oxide.Plugins
         private void MaybeAddFuel(ModularCar car)
         {
             var maxFuelAmount = PluginConfig.MaxFuelAmount;
-			var minFuelAmount = PluginConfig.MinFuelAmount;
+            var minFuelAmount = PluginConfig.FuelAmount;
             if (maxFuelAmount == 0) return;
 
             var fuelContainer = car.fuelSystem.GetFuelContainer();
             if (maxFuelAmount < 0)
                 maxFuelAmount = fuelContainer.allowedItem.stackable;
 
-			if (minFuelAmount < 0)
-				minFuelAmount = 0;
+            if (minFuelAmount < 0)
+                minFuelAmount = 0;
 
             var fuelItem = fuelContainer.inventory.FindItemByItemID(fuelContainer.allowedItem.itemid);
-			var totalFuel = UnityEngine.Random.Range(minFuelAmount, maxFuelAmount+1);
+            var totalFuel = UnityEngine.Random.Range(minFuelAmount, maxFuelAmount+1);
             if (fuelItem == null && totalFuel > 0)
                 fuelContainer.inventory.AddItem(fuelContainer.allowedItem, totalFuel);
         }
@@ -118,28 +118,39 @@ namespace Oxide.Plugins
         private void AddPartsToEngineStorage(EngineStorage engineStorage, int desiredTier)
         {
             if (engineStorage.inventory == null) return;
-
-			var partchance = PluginConfig.EnginePartChance;
-			var t3_chance = PluginConfig.EnginePartsTier3Chance;
-			var t2_chance = PluginConfig.EnginePartsTier2Chance;
-			var t1_chance = PluginConfig.EnginePartsTier1Chance;
-			var t_roll = UnityEngine.Random.Range(0, 100);
-			var curtier = desiredTier;
+			
+			/* */
+			// It is rolled once for every slot it iterates through, increasing the likelyhood for a slot to be populated.
+			// Setting this to 100 (%) will guarantee that engine will get a part in all slots, 0 (%) guarantees none.
+			// Setting this to I.e 50 (%) will cause on average that vehicles are spawned with half of its needed engine parts.
+            var engineSlotFillChance = PluginConfig.EngineSlotFillChance; 
+			
+			// Tier chance is the chance for a an engine part to become the particular tier.
+			// Also rolled for every part individually, making it possible to get all possible combinations of qualities.
+            var tier3Chance = PluginConfig.EnginePartsTier3Chance;
+            var tier2Chance = PluginConfig.EnginePartsTier2Chance;
+            var tier1Chance = PluginConfig.EnginePartsTier1Chance;
+			
+			// - Together does these four variables make it so that engines can spawn with random number of parts with a random quality where you set the chances in config.
+			/* */
+			
+            var tierRoll = UnityEngine.Random.Range(0, 100);
+            var currentTier = desiredTier;
             var inventory = engineStorage.inventory;
             for (var i = 0; i < inventory.capacity; i++)
             {
                 // Do nothing if there is an existing engine part
                 var item = inventory.GetSlot(i);
-				t_roll = UnityEngine.Random.Range(0, 100);
+                tierRoll = UnityEngine.Random.Range(0, 100);
                 if (item == null)
-					if(t_roll < t3_chance){
-						curtier = 3;
-					} else if(t_roll < t2_chance){
-						curtier = 2;
-					} else {
-						curtier = 1;
+                    if(tierRoll < tier3Chance){
+                        currentTier = 3;
+					} else if(tierRoll < tier2Chance){
+                        currentTier = 2;
+					} else{
+                        currentTier = 1;
 					}
-                    TryAddEngineItem(engineStorage, i, curtier, partchance);
+                    TryAddEngineItem(engineStorage, i, currentTier, engineSlotFillChance);
             }
         }
 
@@ -152,11 +163,16 @@ namespace Oxide.Plugins
             var item = ItemManager.Create(component);
             if (item == null) return false;
 
-            item.condition = UnityEngine.Random.Range(1.0f, 100.0f);
-            if(UnityEngine.Random.Range(0, 100) < chance){
-				item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
-			} else {
-				return false;
+			var minCondition = PluginConfig.EnginePartMinCondition; //(%)
+			var maxCondition = PluginConfig.EnginePartMaxCondition; //(%)
+			if(minCondition > maxCondition)
+				maxCondition = maxCondition;
+			
+            item.condition = UnityEngine.Random.Range(minCondition, maxCondition);
+            if(UnityEngine.Random.Range(0, 100) < chance || minCondition >= 100.0f){
+                item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
+			} else{
+                return false;
 			}
 
             return true;
@@ -171,25 +187,31 @@ namespace Oxide.Plugins
         internal class CarSpawnSettingsConfig
         {
             [JsonProperty("EnginePartsTier")]
-            public int EnginePartsTier = 3;
+            public int EnginePartsTier = 0;
 
-			[JsonProperty("EnginePartsTier3Chance")]
+            [JsonProperty("EnginePartsTier3Chance")]
             public int EnginePartsTier3Chance = 5;
 
-			[JsonProperty("EnginePartsTier2Chance")]
+            [JsonProperty("EnginePartsTier2Chance")]
             public int EnginePartsTier2Chance = 20;
 
-			[JsonProperty("EnginePartsTier1Chance")]
+            [JsonProperty("EnginePartsTier1Chance")]
             public int EnginePartsTier1Chance = 75;
 
             [JsonProperty("MaxFuelAmount")]
             public int MaxFuelAmount = 11;
 
-			[JsonProperty("MinFuelAmount")]
-            public int MinFuelAmount = 0;
+            [JsonProperty("FuelAmount")]
+            public int FuelAmount = 0;
 
-			[JsonProperty("EnginePartChance")]
-            public int EnginePartChance = 25;
+            [JsonProperty("EngineSlotFillChance")]
+            public int EngineSlotFillChance = 25;
+			
+			[JsonProperty("EnginePartMaxCondition")]
+            public float EnginePartMaxCondition = 100.0f;
+			
+			[JsonProperty("EnginePartMinCondition")]
+            public float EnginePartMinCondition = 1.0f;
 
             [JsonProperty("HealthPercentage")]
             public float HealthPercentage = -1;

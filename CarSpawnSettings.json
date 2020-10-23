@@ -1,0 +1,14 @@
+{
+  "EnginePartsTier": 3,
+  "EnginePartsTier3Chance": 5,
+  "EnginePartsTier2Chance": 20,
+  "EnginePartsTier1Chance": 75,
+  "MaxFuelAmount": 11,
+  "FuelAmount": 0,
+  "EngineSlotFillChance": 25,
+  "EnginePartMaxCondition": 100.0,
+  "EnginePartMinCondition": 1.0,
+  "HealthPercentage": -1.0,
+  "IncludeChassis": false,
+  "IncludeOwnedCars": false
+}
