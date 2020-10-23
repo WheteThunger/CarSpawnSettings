@@ -118,43 +118,34 @@ namespace Oxide.Plugins
         private void AddPartsToEngineStorage(EngineStorage engineStorage, int desiredTier)
         {
             if (engineStorage.inventory == null) return;
-			
-			/* */
-			// It is rolled once for every slot it iterates through, increasing the likelyhood for a slot to be populated.
-			// Setting this to 100 (%) will guarantee that engine will get a part in all slots, 0 (%) guarantees none.
-			// Setting this to I.e 50 (%) will cause on average that vehicles are spawned with half of its needed engine parts.
-            var engineSlotFillChance = PluginConfig.EngineSlotFillChance; 
-			
-			// Tier chance is the chance for a an engine part to become the particular tier.
-			// Also rolled for every part individually, making it possible to get all possible combinations of qualities.
+
             var tier3Chance = PluginConfig.EnginePartsTier3Chance;
             var tier2Chance = PluginConfig.EnginePartsTier2Chance;
             var tier1Chance = PluginConfig.EnginePartsTier1Chance;
-			
-			// - Together does these four variables make it so that engines can spawn with random number of parts with a random quality where you set the chances in config.
-			/* */
-			
-            var tierRoll = UnityEngine.Random.Range(0, 100);
+
             var currentTier = desiredTier;
             var inventory = engineStorage.inventory;
             for (var i = 0; i < inventory.capacity; i++)
             {
                 // Do nothing if there is an existing engine part
                 var item = inventory.GetSlot(i);
-                tierRoll = UnityEngine.Random.Range(0, 100);
-                if (item == null)
-                    if(tierRoll < tier3Chance){
-                        currentTier = 3;
-					} else if(tierRoll < tier2Chance){
-                        currentTier = 2;
-					} else{
-                        currentTier = 1;
-					}
-                    TryAddEngineItem(engineStorage, i, currentTier, engineSlotFillChance);
-            }
+                if (item == null){
+                  var tierRoll = UnityEngine.Random.Range(0, 100);
+                  if(tierRoll < tier3Chance){
+                    currentTier = 3;
+                  } else if(tierRoll < tier2Chance){
+                    currentTier = 2;
+                  } else if(tierRoll < tier1Chance){
+                    currentTier = 1;
+                  } else{
+                    continue;
+                  }
+                  TryAddEngineItem(engineStorage, i, currentTier);
+                }
+              }
         }
 
-        private bool TryAddEngineItem(EngineStorage engineStorage, int slot, int tier, int chance)
+        private bool TryAddEngineItem(EngineStorage engineStorage, int slot, int tier)
         {
             ItemModEngineItem output;
             if (!engineStorage.allEngineItems.TryGetItem(tier, engineStorage.slotTypes[slot], out output)) return false;
@@ -163,18 +154,11 @@ namespace Oxide.Plugins
             var item = ItemManager.Create(component);
             if (item == null) return false;
 
-			var minCondition = PluginConfig.EnginePartMinCondition; //(%)
-			var maxCondition = PluginConfig.EnginePartMaxCondition; //(%)
-			if(minCondition > maxCondition)
-				maxCondition = maxCondition;
-			
-            item.condition = UnityEngine.Random.Range(minCondition, maxCondition);
-            if(UnityEngine.Random.Range(0, 100) < chance || minCondition >= 100.0f){
-                item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
-			} else{
-                return false;
-			}
+            var minCondition = PluginConfig.EnginePartMinCondition;
+            var maxCondition = PluginConfig.EnginePartMaxCondition;
 
+            item.condition = UnityEngine.Random.Range(minCondition, maxCondition);
+            item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
         }
 
@@ -193,10 +177,10 @@ namespace Oxide.Plugins
             public int EnginePartsTier3Chance = 5;
 
             [JsonProperty("EnginePartsTier2Chance")]
-            public int EnginePartsTier2Chance = 20;
+            public int EnginePartsTier2Chance = 10;
 
             [JsonProperty("EnginePartsTier1Chance")]
-            public int EnginePartsTier1Chance = 75;
+            public int EnginePartsTier1Chance = 30;
 
             [JsonProperty("MaxFuelAmount")]
             public int MaxFuelAmount = 11;
@@ -204,14 +188,11 @@ namespace Oxide.Plugins
             [JsonProperty("FuelAmount")]
             public int FuelAmount = 0;
 
-            [JsonProperty("EngineSlotFillChance")]
-            public int EngineSlotFillChance = 25;
-			
-			[JsonProperty("EnginePartMaxCondition")]
+            [JsonProperty("EnginePartMaxCondition")]
             public float EnginePartMaxCondition = 100.0f;
-			
-			[JsonProperty("EnginePartMinCondition")]
-            public float EnginePartMinCondition = 1.0f;
+
+            [JsonProperty("EnginePartMinCondition")]
+            public float EnginePartMinCondition = 100.0f;
 
             [JsonProperty("HealthPercentage")]
             public float HealthPercentage = -1;
