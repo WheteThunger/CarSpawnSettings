@@ -17,19 +17,77 @@ If another plugin updates a car's health, fuel or engine parts before this plugi
 Default configuration:
 ```json
 {
-  "EnginePartsTier": 0,
-  "FuelAmount": 0,
+  "EnginePartsTier1Chance": 0,
+  "EnginePartsTier2Chance": 0,
+  "EnginePartsTier3Chance": 0,
+  "EnginePartMinConditionPercent": 100.0,
+  "EnginePartMaxConditionPercent": 100.0,
+  "MinFuelAmount": 0,
+  "MaxFuelAmount": 0,
   "HealthPercentage": -1.0,
   "IncludeChassis": false,
   "IncludeOwnedCars": false
 }
 ```
 
-- `EnginePartsTier` (`0` - `3`) -- The quality of engine parts to add to all of the car's engine modules when it spawns (`0` for no engine parts).
-- `FuelAmount` -- The amount of low grade fuel to put in the car's fuel tank when it spawns (`-1` for max stack size).
+- `EnginePartsTier*Chance` (`0` - `100`) -- These three options control the chance that an engine part slot will be filled with a part of the corresponding quality. For example, setting `EnginePartsTier1Chance` to 100 will guarantee that each engine part slot is filled with at least a low quality engine part. Additionally setting `EnginePartsTier2Chance` to 50 would grant a 50% chance that each slot will receive a medium quality part instead of a low quality part.
+- `EnginePartMinConditionPercent` / `EnginePartMaxConditionPercent` (max `100`) -- These options determine the condition that each engine part will be assigned. You can set them both to the same value if you don't want randomization.
+- `MinFuelAmount` / `MaxFuelAmount` -- These options determine the amount of low grade fuel to put in the car's fuel tank when it spawns. You can set them both to the same value if you don't want randomization.
 - `HealthPercentage` (max `100`) -- The minimum health percentage that each module should be set to when the car spawns (`-1` to not alter health). Note: To avoid compatibility issues with other plugins, this plugin will only increase health if it's below the configured amount, never reduce it.
+
+### Advanced compatibility options
+
 - `IncludeChassis` (`true` or `false`) -- Whether to affect cars that are spawned as just a chassis (cars with `car.spawnSettings.useSpawnSettings = false`). Currently, that can only be done by a plugin, so this option defaults to `false` to avoid conflicts. Keep in mind that a plugin may spawn a chassis and then add modules to it, so altering this option may affect more plugins than you expect.
 - `IncludeOwnedCars` (`true` or `false`) -- Whether to affect cars spawned with a non-zero `OwnerID`. Currently, that can only be done by a plugin, so this option defaults to `false` to avoid conflicts.
+
+### Legacy options
+
+These options were present in a previous version. They still work for backwards compatibility.
+
+- `EnginePartsTier` (`0` - `3`) -- The quality of engine parts to add to all of the car's engine modules when it spawns.
+  - When 0, the `EnginePartsTier*Chance` options will be used instead.
+- `FuelAmount` -- The amount of low grade fuel to put in the car's fuel tank when it spawns (`-1` for max stack size).
+  - When 0, the `MinFuelAmount` and `MaxFuelAmount` will be used instead.
+
+### Starter configs
+
+#### High-end cars
+
+Fully repaired, tier 3 parts, 500 low grade.
+
+```json
+{
+  "EnginePartsTier1Chance": 0,
+  "EnginePartsTier2Chance": 0,
+  "EnginePartsTier3Chance": 100,
+  "EnginePartMinConditionPercent": 100.0,
+  "EnginePartMaxConditionPercent": 100.0,
+  "MinFuelAmount": 500,
+  "MaxFuelAmount": 500,
+  "HealthPercentage": 100.0,
+  "IncludeChassis": false,
+  "IncludeOwnedCars": false
+}
+```
+
+#### Random health, fuel, parts and condition
+
+Based on vanilla loot tables.
+
+```json
+{
+  "EnginePartsTier1Chance": 27,
+  "EnginePartsTier2Chance": 9,
+  "EnginePartsTier3Chance": 3,
+  "EnginePartMinConditionPercent": 25.0,
+  "EnginePartMaxConditionPercent": 75.0,
+  "MinFuelAmount": 0,
+  "MaxFuelAmount": 25,
+  "HealthPercentage": -1.0,
+  "IncludeChassis": false,
+  "IncludeOwnedCars": false
+}
+```
 
 ## Hooks
 
