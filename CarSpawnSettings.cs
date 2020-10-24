@@ -1,4 +1,8 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
+using System.Collections.Generic;
+using System.Linq;
 using Oxide.Core;
 using Rust.Modular;
 
@@ -10,26 +14,21 @@ namespace Oxide.Plugins
     {
         #region Fields
 
-        private CarSpawnSettingsConfig PluginConfig;
+        private Configuration pluginConfig;
 
         #endregion
 
         #region Hooks
 
-        private void Init()
-        {
-            PluginConfig = Config.ReadObject<CarSpawnSettingsConfig>();
-        }
-
         private void OnEntitySpawned(ModularCar car)
         {
             if (Rust.Application.isLoadingSave) return;
-            if (!PluginConfig.IncludeChassis && !car.spawnSettings.useSpawnSettings) return;
+            if (!pluginConfig.IncludeChassis && !car.spawnSettings.useSpawnSettings) return;
 
             timer.Once(0.5f, () =>
             {
                 if (car == null) return;
-                if (!PluginConfig.IncludeOwnedCars && car.OwnerID != 0) return;
+                if (!pluginConfig.IncludeOwnedCars && car.OwnerID != 0) return;
                 if (BootstrapWasBlocked(car)) return;
 
                 BootstrapAfterModules(car);
@@ -55,7 +54,7 @@ namespace Oxide.Plugins
 
         private void MaybeRepairModules(ModularCar car)
         {
-            var healthPercentage = PluginConfig.HealthPercentage;
+            var healthPercentage = pluginConfig.HealthPercentage;
             if (healthPercentage < 0 || healthPercentage > 100) return;
             healthPercentage /= 100;
 
@@ -77,7 +76,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddFuel(ModularCar car)
         {
-            var fuelAmount = PluginConfig.GetPossiblyRandomFuelAmount();
+            var fuelAmount = pluginConfig.GetPossiblyRandomFuelAmount();
             if (fuelAmount == 0) return;
 
             var fuelContainer = car.fuelSystem.GetFuelContainer();
@@ -91,7 +90,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddEngineParts(ModularCar car)
         {
-            if (!PluginConfig.CanHaveEngineParts()) return;
+            if (!pluginConfig.CanHaveEngineParts()) return;
 
             foreach (var module in car.AttachedModuleEntities)
             {
@@ -119,7 +118,7 @@ namespace Oxide.Plugins
                 var item = inventory.GetSlot(i);
                 if (item != null) continue;
 
-                var tier = PluginConfig.GetPossiblyRandomEnginePartTier();
+                var tier = pluginConfig.GetPossiblyRandomEnginePartTier();
                 if (tier > 0)
                     TryAddEngineItem(engineStorage, i, tier);
             }
@@ -134,7 +133,7 @@ namespace Oxide.Plugins
             var item = ItemManager.Create(component);
             if (item == null) return false;
             
-            item.conditionNormalized = PluginConfig.GetRandomNormalizedCondition();
+            item.conditionNormalized = pluginConfig.GetRandomNormalizedCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
         }
@@ -143,9 +142,9 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        protected override void LoadDefaultConfig() => Config.WriteObject(new CarSpawnSettingsConfig(), true);
+        private Configuration GetDefaultConfig() => new Configuration();
 
-        internal class CarSpawnSettingsConfig
+        internal class Configuration : SerializableConfiguration
         {
             [JsonProperty("EnginePartsTier", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int EnginePartsTier = 0;
@@ -217,6 +216,111 @@ namespace Oxide.Plugins
 
                 return UnityEngine.Random.Range(MinFuelAmount, MaxFuelAmount + 1);
             }
+        }
+
+        #endregion
+
+        #region Configuration Boilerplate
+
+        internal class SerializableConfiguration
+        {
+            public string ToJson() => JsonConvert.SerializeObject(this);
+
+            public Dictionary<string, object> ToDictionary() => JsonHelper.Deserialize(ToJson()) as Dictionary<string, object>;
+        }
+
+        internal static class JsonHelper
+        {
+            public static object Deserialize(string json) => ToObject(JToken.Parse(json));
+
+            private static object ToObject(JToken token)
+            {
+                switch (token.Type)
+                {
+                    case JTokenType.Object:
+                        return token.Children<JProperty>()
+                                    .ToDictionary(prop => prop.Name,
+                                                  prop => ToObject(prop.Value));
+
+                    case JTokenType.Array:
+                        return token.Select(ToObject).ToList();
+
+                    default:
+                        return ((JValue)token).Value;
+                }
+            }
+        }
+
+        private bool MaybeUpdateConfig(SerializableConfiguration config)
+        {
+            var currentWithDefaults = config.ToDictionary();
+            var currentRaw = Config.ToDictionary(x => x.Key, x => x.Value);
+            return MaybeUpdateConfigDict(currentWithDefaults, currentRaw);
+        }
+
+        private bool MaybeUpdateConfigDict(Dictionary<string, object> currentWithDefaults, Dictionary<string, object> currentRaw)
+        {
+            bool changed = false;
+
+            foreach (var key in currentWithDefaults.Keys)
+            {
+                object currentRawValue;
+                if (currentRaw.TryGetValue(key, out currentRawValue))
+                {
+                    var defaultDictValue = currentWithDefaults[key] as Dictionary<string, object>;
+                    var currentDictValue = currentRawValue as Dictionary<string, object>;
+
+                    if (defaultDictValue != null)
+                    {
+                        if (currentDictValue == null)
+                        {
+                            currentRaw[key] = currentWithDefaults[key];
+                            changed = true;
+                        }
+                        else if (MaybeUpdateConfigDict(defaultDictValue, currentDictValue))
+                            changed = true;
+                    }
+                }
+                else
+                {
+                    currentRaw[key] = currentWithDefaults[key];
+                    changed = true;
+                }
+            }
+
+            return changed;
+        }
+
+        protected override void LoadDefaultConfig() => pluginConfig = GetDefaultConfig();
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            try
+            {
+                pluginConfig = Config.ReadObject<Configuration>();
+                if (pluginConfig == null)
+                {
+                    throw new JsonException();
+                }
+
+                if (MaybeUpdateConfig(pluginConfig))
+                {
+                    LogWarning("Configuration appears to be outdated; updating and saving");
+                    SaveConfig();
+                }
+            }
+            catch
+            {
+                LogWarning($"Configuration file {Name}.json is invalid; using defaults");
+                LoadDefaultConfig();
+            }
+        }
+
+        protected override void SaveConfig()
+        {
+            Log($"Configuration changes saved to {Name}.json");
+            Config.WriteObject(pluginConfig, true);
         }
 
         #endregion
