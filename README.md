@@ -17,11 +17,13 @@ If another plugin updates a car's health, fuel or engine parts before this plugi
 Default configuration:
 ```json
 {
-  "EnginePartsTier1Chance": 0,
-  "EnginePartsTier2Chance": 0,
-  "EnginePartsTier3Chance": 0,
-  "EnginePartMinConditionPercent": 100.0,
-  "EnginePartMaxConditionPercent": 100.0,
+  "EngineParts": {
+    "Tier1Chance": 0,
+    "Tier2Chance": 0,
+    "Tier3Chance": 0,
+    "MinConditionPercent": 100.0,
+    "MaxConditionPercent": 100.0
+  },
   "MinFuelAmount": 0,
   "MaxFuelAmount": 0,
   "HealthPercentage": -1.0,
@@ -57,11 +59,13 @@ Fully repaired, tier 3 parts, 500 low grade.
 
 ```json
 {
-  "EnginePartsTier1Chance": 0,
-  "EnginePartsTier2Chance": 0,
-  "EnginePartsTier3Chance": 100,
-  "EnginePartMinConditionPercent": 100.0,
-  "EnginePartMaxConditionPercent": 100.0,
+  "EngineParts": {
+    "Tier1Chance": 0,
+    "Tier2Chance": 0,
+    "Tier3Chance": 100,
+    "MinConditionPercent": 100.0,
+    "MaxConditionPercent": 100.0
+  },
   "MinFuelAmount": 500,
   "MaxFuelAmount": 500,
   "HealthPercentage": 100.0,
@@ -76,11 +80,13 @@ Based on vanilla loot tables.
 
 ```json
 {
-  "EnginePartsTier1Chance": 27,
-  "EnginePartsTier2Chance": 9,
-  "EnginePartsTier3Chance": 3,
-  "EnginePartMinConditionPercent": 25.0,
-  "EnginePartMaxConditionPercent": 75.0,
+  "EngineParts": {
+    "Tier1Chance": 27,
+    "Tier2Chance": 9,
+    "Tier3Chance": 3,
+    "MinConditionPercent": 25.0,
+    "MaxConditionPercent": 75.0
+  },
   "MinFuelAmount": 0,
   "MaxFuelAmount": 25,
   "HealthPercentage": -1.0,

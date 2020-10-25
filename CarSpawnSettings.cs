@@ -149,23 +149,11 @@ namespace Oxide.Plugins
             [JsonProperty("EnginePartsTier", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int EnginePartsTier = 0;
 
-            [JsonProperty("EnginePartsTier1Chance")]
-            public int EnginePartsTier1Chance = 0;
-
-            [JsonProperty("EnginePartsTier2Chance")]
-            public int EnginePartsTier2Chance = 0;
-
-            [JsonProperty("EnginePartsTier3Chance")]
-            public int EnginePartsTier3Chance = 0;
-
-            [JsonProperty("EnginePartMinConditionPercent")]
-            public float EnginePartMinConditionPercent = 100.0f;
-
-            [JsonProperty("EnginePartMaxConditionPercent")]
-            public float EnginePartMaxConditionPercent = 100.0f;
-
             [JsonProperty("FuelAmount", DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int FuelAmount = 0;
+
+            [JsonProperty("EngineParts")]
+            public EnginePartConfiguration EngineParts = new EnginePartConfiguration();
 
             [JsonProperty("MinFuelAmount")]
             public int MinFuelAmount = 0;
@@ -183,7 +171,10 @@ namespace Oxide.Plugins
             public bool IncludeOwnedCars = false;
 
             public bool CanHaveEngineParts() =>
-                EnginePartsTier > 0 || EnginePartsTier1Chance > 0 || EnginePartsTier2Chance > 0 || EnginePartsTier3Chance > 0;
+                EnginePartsTier > 0 ||
+                EngineParts.Tier1Chance > 0 ||
+                EngineParts.Tier2Chance > 0 ||
+                EngineParts.Tier3Chance > 0;
 
             public int GetPossiblyRandomEnginePartTier()
             {
@@ -191,20 +182,20 @@ namespace Oxide.Plugins
                     return EnginePartsTier;
 
                 var tierRoll = UnityEngine.Random.Range(0, 100);
-                if (tierRoll < EnginePartsTier3Chance)
+                if (tierRoll < EngineParts.Tier3Chance)
                     return 3;
-                else if (tierRoll < EnginePartsTier2Chance)
+                else if (tierRoll < EngineParts.Tier2Chance)
                     return 2;
-                else if (tierRoll < EnginePartsTier1Chance)
+                else if (tierRoll < EngineParts.Tier1Chance)
                     return 1;
                 else
                     return 0;
             }
 
             public float GetRandomNormalizedCondition() =>
-                EnginePartMinConditionPercent == 100f
+                EngineParts.MinConditionPercent == 100f
                 ? 1.0f
-                : UnityEngine.Mathf.Round(UnityEngine.Random.Range(EnginePartMinConditionPercent, EnginePartMaxConditionPercent)) / 100f;
+                : UnityEngine.Mathf.Round(UnityEngine.Random.Range(EngineParts.MinConditionPercent, EngineParts.MaxConditionPercent)) / 100f;
 
             public int GetPossiblyRandomFuelAmount()
             {
@@ -216,6 +207,24 @@ namespace Oxide.Plugins
 
                 return UnityEngine.Random.Range(MinFuelAmount, MaxFuelAmount + 1);
             }
+        }
+
+        internal class EnginePartConfiguration
+        {
+            [JsonProperty("Tier1Chance")]
+            public int Tier1Chance = 0;
+
+            [JsonProperty("Tier2Chance")]
+            public int Tier2Chance = 0;
+
+            [JsonProperty("Tier3Chance")]
+            public int Tier3Chance = 0;
+
+            [JsonProperty("MinConditionPercent")]
+            public float MinConditionPercent = 100.0f;
+
+            [JsonProperty("MaxConditionPercent")]
+            public float MaxConditionPercent = 100.0f;
         }
 
         #endregion
