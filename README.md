@@ -1,4 +1,6 @@
-**Car Spawn Settings** allows modular cars to spawn with configurable health, fuel, and engine parts. This only affects cars that spawn after the plugin loads, not existing cars.
+**Car Spawn Settings** allows modular cars to spawn with configurable health, fuel, and engine parts.
+
+Note: This only affects cars that spawn after the plugin loads, not existing cars.
 
 ## Configuration
 
@@ -20,10 +22,11 @@ Default configuration:
 }
 ```
 
-- `EnginePartsTier*Chance` (`0` - `100`) -- These three options control the chance that an engine part slot will be filled with a part of the corresponding quality. For example, setting `EnginePartsTier1Chance` to 100 will guarantee that each engine part slot is filled with at least a low quality engine part. Additionally setting `EnginePartsTier2Chance` to 50 would grant a 50% chance that each slot will receive a medium quality part instead of a low quality part.
-- `EnginePartMinConditionPercent` / `EnginePartMaxConditionPercent` (max `100`) -- These options determine the condition that each engine part will be assigned. You can set them both to the same value if you don't want randomization.
+- `EngineParts`
+  - `Tier*Chance` (`0` - `100`) -- These three options control the chance that an engine part slot will be filled with a part of the corresponding quality. For example, setting `EnginePartsTier1Chance` to 100 will guarantee that each engine part slot is filled with at least a low quality engine part. Additionally setting `EnginePartsTier2Chance` to 50 would grant a 50% chance that each slot will receive a medium quality part instead of a low quality part.
+  - `MinConditionPercent` / `MaxConditionPercent` (`0` - `100`) -- These options determine the condition that each engine part will be assigned. You can set them both to the same value if you don't want randomization.
 - `MinFuelAmount` / `MaxFuelAmount` -- These options determine the amount of low grade fuel to put in the car's fuel tank when it spawns. You can set them both to the same value if you don't want randomization.
-- `HealthPercentage` (max `100`) -- The minimum health percentage that each module should be set to when the car spawns (`-1` to not alter health). Note: To avoid compatibility issues with other plugins, this plugin will only increase health if it's below the configured amount, never reduce it.
+- `HealthPercentage` (`0` - `100`) -- The minimum health percentage that each module should be set to when the car spawns (`-1` to not alter health). Note: To avoid compatibility issues with other plugins, this plugin will only increase health if it's below the configured amount, never reduce it.
 
 ### Advanced compatibility options
 
@@ -32,10 +35,10 @@ Default configuration:
 
 ### Legacy options
 
-These options were present in a previous version. They still work for backwards compatibility.
+These options were introduced in a previous version. They still work for backwards compatibility.
 
 - `EnginePartsTier` (`0` - `3`) -- The quality of engine parts to add to all of the car's engine modules when it spawns.
-  - When 0, the `EnginePartsTier*Chance` options will be used instead.
+  - When 0, the `EngineParts.Tier*Chance` options will be used instead.
 - `FuelAmount` -- The amount of low grade fuel to put in the car's fuel tank when it spawns (`-1` for max stack size).
   - When 0, the `MinFuelAmount` and `MaxFuelAmount` will be used instead.
 
