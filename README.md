@@ -1,17 +1,5 @@
 **Car Spawn Settings** allows modular cars to spawn with configurable health, fuel, and engine parts. This only affects cars that spawn after the plugin loads, not existing cars.
 
-## Plugin Compatibility
-
-This plugin may affect cars spawned by other plugins. It is recommended that other plugins be resilient to the presence of existing engine parts and fuel (in case this plugin adds them first), and to use the `CanBootstrapSpawnedCar` hook to prevent this plugin from affecting specific cars if desired.
-
-If another plugin updates a car's health, fuel or engine parts before this plugin, this plugin will at most increase the health to the configured amount (never reduce health), will only add fuel if there is none, and will only add engine parts to empty slots.
-
-- [Craft Car Chassis](https://umod.org/plugins/craft-car-chassis)
-  - The chassis is ignored by this plugin, meaning it is not given fuel, unless you configure this plugin with `IncludeChassis: true`. May also require `IncludeOwnedCars: true` depending on whether the Craft Car Chassis plugin is configured to set an owner.
-- [Spawn Modular Car](https://umod.org/plugins/spawn-modular-car)
-  - Cars spawned from a preset are ignored by this plugin unless you configure this plugin with both `IncludeChassis: true` and `IncludeOwnedCars: true`. This includes cars spawned using the API from Spawn Modular Car.
-  - Cars spawned with a random module configuration are ignored unless you configure this plugin with `IncludeOwnedCars: true`.
-
 ## Configuration
 
 Default configuration:
@@ -95,7 +83,19 @@ Based on vanilla loot tables.
 }
 ```
 
-## Hooks
+## Plugin Compatibility
+
+This plugin may affect cars spawned by other plugins. It is recommended that other plugins be resilient to the presence of existing engine parts and fuel (in case this plugin adds them first), and to use the `CanBootstrapSpawnedCar` hook to prevent this plugin from affecting specific cars if desired.
+
+If another plugin updates a car's health, fuel or engine parts before this plugin, this plugin will at most increase the health to the configured amount (never reduce health), will only add fuel if there is none, and will only add engine parts to empty slots.
+
+- [Craft Car Chassis](https://umod.org/plugins/craft-car-chassis)
+  - The chassis is ignored by this plugin, meaning it is not given fuel, unless you configure this plugin with `IncludeChassis: true`. May also require `IncludeOwnedCars: true` depending on whether the Craft Car Chassis plugin is configured to set an owner.
+- [Spawn Modular Car](https://umod.org/plugins/spawn-modular-car)
+  - Cars spawned from a preset are ignored by this plugin unless you configure this plugin with both `IncludeChassis: true` and `IncludeOwnedCars: true`. This includes cars spawned using the API from Spawn Modular Car.
+  - Cars spawned with a random module configuration are ignored unless you configure this plugin with `IncludeOwnedCars: true`.
+
+## Developer Hooks
 
 #### CanBootstrapSpawnedCar
 
