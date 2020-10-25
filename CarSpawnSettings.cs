@@ -8,7 +8,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "1.0.3")]
+    [Info("Car Spawn Settings", "WhiteThunder", "1.1.0")]
     [Description("Allows modular cars to spawn with configurable health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
