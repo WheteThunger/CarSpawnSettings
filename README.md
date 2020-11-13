@@ -2,6 +2,8 @@
 
 Note: This only affects cars that spawn after the plugin loads, not existing cars.
 
+As an alternative (or supplement) to spawning cars with engine parts, you can also try out the [No Engine Parts](https://umod.org/plugins/no-engine-parts) plugin, which allows car engines to function without engine parts. Supports multiple use cases.
+
 ## Configuration
 
 Default configuration (vanilla equivalent):
@@ -104,7 +106,7 @@ Fully repaired, high quality parts, 500 low grade.
 
 #### Random health, fuel, parts and condition
 
-Based on vanilla loot tables.
+Based on vanilla settings and loot tables.
 
 ```json
   "EngineParts": {
