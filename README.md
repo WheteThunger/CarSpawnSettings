@@ -38,7 +38,7 @@ Default configuration (vanilla equivalent):
 ```
 
 - `EngineParts`
-  - `Tier*Chance` (`0` - `100`) -- These three options control the chance that an engine part slot will be filled with a part of the corresponding quality. For example, setting `Tier1Chance` to 100 will guarantee that each engine part slot is filled with at least a low quality engine part. Additionally setting `Tier2Chance` to 50 would grant a 50% chance that each slot will receive a medium quality part instead of a low quality part. The total chance that an engine part will spawn is equal to the sum of all three chances.
+  - `Tier*Chance` (`0` - `100`) -- These three options control the chance that an engine part slot will be filled with a part of the corresponding quality. For example, setting `Tier1Chance` to 100 will guarantee that each engine part slot is filled with at least a low quality engine part. Additionally setting `Tier2Chance` to 50 would grant a 50% chance that each slot will receive a medium quality part instead of a low quality part. Each tier gets a separate roll, so the total part chance is multiplicative with dimishing returns. Formula: `OverallChance = 100 - 100 * (1 - 0.01 * T3) * (1 - 0.01 * T2) * (1 - 0.01 * T1)`.
   - `MinConditionPercent` / `MaxConditionPercent` (`0` - `100`) -- These options determine the condition that each engine part will be assigned. You can set them both to the same value if you don't want randomization.
 - `MinFuelAmount` / `MaxFuelAmount` -- These options determine the amount of low grade fuel to put in the car's fuel tank when it spawns. You can set them both to the same value if you don't want randomization.
 - `ModulePresets` -- These settings allow you to customize the modules that cars spawn with, using presets. Each car size is configured separately. You can use either vanilla presets, custom presets, or a combination of both. The exact preset used will be randomly selected from the list when a car spawns.
@@ -106,7 +106,7 @@ Fully repaired, high quality parts, 500 low grade.
 
 #### Random health, fuel, parts and condition
 
-Based on vanilla settings and loot tables.
+Based on vanilla settings and loot tables. Overall 35.5% chance for engine parts in each slot.
 
 ```json
   "EngineParts": {
