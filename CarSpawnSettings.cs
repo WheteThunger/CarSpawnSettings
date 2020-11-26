@@ -10,7 +10,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.0.0")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.0.1")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -61,14 +61,14 @@ namespace Oxide.Plugins
                 AddCarModules(car, moduleIds);
             }
 
-            // The modules need quite a bit of time to actually spawn
-            timer.Once(0.5f, () =>
+            // Using Invoke(fn, 0) since that is what the game uses to delay module entity creation
+            car.Invoke(() =>
             {
                 if (car == null || car.OwnerID != 0 || BootstrapWasBlocked(car))
                     return;
 
                 BootstrapAfterModules(car);
-            });
+            }, 0);
 
             return false;
         }

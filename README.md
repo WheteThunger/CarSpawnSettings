@@ -140,7 +140,7 @@ It is recommended that other plugins be resilient to the presence of existing fu
 
 This hook can be used to prevent this plugin from adding fuel or engine parts to specific unowned cars. Not necessary for cars spawned as a chassis or with an explicit `OwnerID`.
 
-- Called at least 0.5 seconds after a modular car is spawned. This delay is partly a requirement so that vehicle modules have time to spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
+- Called some time after a modular car is spawned (on next tick or later). This delay is a requirement so that module entities can spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
 - Returning `false` will prevent this plugin from adding fuel or engine parts.
 - Returning `null` will result in the default behavior.
 
