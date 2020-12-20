@@ -10,7 +10,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.0.1")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.0.2")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -27,10 +27,11 @@ namespace Oxide.Plugins
         private void Init()
         {
             pluginInstance = this;
-        }
 
-        private void OnServerInitialized() =>
+            // Make sure presets are ready as soon as possible
+            // Cars can spawn while generating a new map before OnServerInitialized()
             pluginConfig.ModulePresetMap.ParseAndValidatePresets();
+        }
 
         private void Unload()
         {
@@ -322,6 +323,10 @@ namespace Oxide.Plugins
 
             public void ParseAndValidatePresets()
             {
+                // ItemManager may not have initialized yet
+                // Safe to call multiple times since it will only initialize once
+                ItemManager.Initialize();
+
                 PresetsFor2Sockets.ParseAndValidatePresets();
                 PresetsFor3Sockets.ParseAndValidatePresets();
                 PresetsFor4Sockets.ParseAndValidatePresets();
