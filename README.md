@@ -2,7 +2,12 @@
 
 Note: This only affects cars that spawn after the plugin loads, not existing cars.
 
-As an alternative (or supplement) to spawning cars with engine parts, you can also try out the [No Engine Parts](https://umod.org/plugins/no-engine-parts) plugin, which allows car engines to function without engine parts. Supports multiple use cases.
+## Recommended related plugins
+
+- [Auto Engine Parts](https://umod.org/plugins/auto-engine-parts) -- Automatically fills engine modules with parts and prevents players from removing them
+  - When configuring Auto Engine Parts to apply to all cars, it's recommended to disable the engine parts options in Car Spawn Settings since they will be overriden anyway
+- [No Engine Parts](https://umod.org/plugins/no-engine-parts) -- Allows car engines to work without engine parts
+  - A great way to use this in conjunction with Car Spawn Settings is to allow cars with incomplete engine part sets to be driven but with reduced stats
 
 ## Configuration
 
