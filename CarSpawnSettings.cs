@@ -10,7 +10,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.0.2")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.0.3")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -150,7 +150,7 @@ namespace Oxide.Plugins
             var fuelAmount = pluginConfig.GetPossiblyRandomFuelAmount();
             if (fuelAmount == 0) return;
 
-            var fuelContainer = car.fuelSystem.GetFuelContainer();
+            var fuelContainer = car.GetFuelSystem().GetFuelContainer();
             if (fuelAmount < 0)
                 fuelAmount = fuelContainer.allowedItem.stackable;
 
@@ -203,7 +203,7 @@ namespace Oxide.Plugins
             var component = output.GetComponent<ItemDefinition>();
             var item = ItemManager.Create(component);
             if (item == null) return false;
-            
+
             item.conditionNormalized = pluginConfig.GetRandomNormalizedPartCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
