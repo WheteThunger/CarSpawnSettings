@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -10,7 +11,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.0.3")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.1.0")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -18,7 +19,8 @@ namespace Oxide.Plugins
 
         private static CarSpawnSettings pluginInstance;
 
-        private Configuration pluginConfig;
+        private Configuration _pluginConfig;
+        private object _boxedFalse = false;
 
         #endregion
 
@@ -30,7 +32,7 @@ namespace Oxide.Plugins
 
             // Make sure presets are ready as soon as possible
             // Cars can spawn while generating a new map before OnServerInitialized()
-            pluginConfig.ModulePresetMap.ParseAndValidatePresets();
+            _pluginConfig.ModulePresetMap.ParseAndValidatePresets();
         }
 
         private void Unload()
@@ -62,16 +64,40 @@ namespace Oxide.Plugins
                 AddCarModules(car, moduleIds);
             }
 
-            // Using Invoke(fn, 0) since that is what the game uses to delay module entity creation
-            car.Invoke(() =>
+            NextTick(() =>
             {
-                if (car == null || car.OwnerID != 0 || BootstrapWasBlocked(car))
+                if (car == null || car.IsDestroyed)
                     return;
 
-                BootstrapAfterModules(car);
-            }, 0);
+                ProcessCar(car);
+            });
 
-            return false;
+            return _boxedFalse;
+        }
+
+        #endregion
+
+        #region Commands
+
+        [Command("carspawnsettings.fillcars")]
+        private void CommandFillCars(IPlayer player)
+        {
+            if (!player.IsAdmin)
+                return;
+
+            var carsProcessed = 0;
+
+            foreach (var entity in BaseNetworkable.serverEntities)
+            {
+                var car = entity as ModularCar;
+                if (car == null || car.IsDestroyed)
+                    continue;
+
+                ProcessCar(car);
+                carsProcessed++;
+            }
+
+            player.Reply(GetMessage(player.Id, Lang.FillSuccess, carsProcessed));
         }
 
         #endregion
@@ -84,14 +110,22 @@ namespace Oxide.Plugins
             return hookResult is bool && (bool)hookResult == false;
         }
 
+        private void ProcessCar(ModularCar car)
+        {
+            if (car.OwnerID != 0 || BootstrapWasBlocked(car))
+                return;
+
+            BootstrapAfterModules(car);
+        }
+
         private ModulePresetConfiguration GetPresetConfigurationForSockets(int totalSockets)
         {
             if (totalSockets == 4)
-                return pluginConfig.ModulePresetMap.PresetsFor4Sockets;
+                return _pluginConfig.ModulePresetMap.PresetsFor4Sockets;
             else if (totalSockets == 3)
-                return pluginConfig.ModulePresetMap.PresetsFor3Sockets;
+                return _pluginConfig.ModulePresetMap.PresetsFor3Sockets;
             else if (totalSockets == 2)
-                return pluginConfig.ModulePresetMap.PresetsFor2Sockets;
+                return _pluginConfig.ModulePresetMap.PresetsFor2Sockets;
             else
                 return null;
         }
@@ -112,7 +146,9 @@ namespace Oxide.Plugins
                 moduleIds.Add(itemDefinition.itemid);
 
                 for (var i = 0; i < module.SocketsTaken - 1; i++)
+                {
                     moduleIds.Add(0);
+                }
             }
 
             return moduleIds.ToArray();
@@ -131,9 +167,12 @@ namespace Oxide.Plugins
                     var moduleItem = ItemManager.CreateByItemID(desiredItemID);
                     if (moduleItem != null)
                     {
-                        moduleItem.conditionNormalized = pluginConfig.GetRandomNormalizedModuleCondition();
+                        moduleItem.conditionNormalized = _pluginConfig.GetRandomNormalizedModuleCondition();
+
                         if (!car.TryAddModule(moduleItem, socketIndex))
+                        {
                             moduleItem.Remove();
+                        }
                     }
                 }
             }
@@ -147,8 +186,9 @@ namespace Oxide.Plugins
 
         private void MaybeAddFuel(ModularCar car)
         {
-            var fuelAmount = pluginConfig.GetPossiblyRandomFuelAmount();
-            if (fuelAmount == 0) return;
+            var fuelAmount = _pluginConfig.GetPossiblyRandomFuelAmount();
+            if (fuelAmount == 0)
+                return;
 
             var fuelContainer = car.GetFuelSystem().GetFuelContainer();
             if (fuelAmount < 0)
@@ -161,50 +201,57 @@ namespace Oxide.Plugins
 
         private void MaybeAddEngineParts(ModularCar car)
         {
-            if (!pluginConfig.CanHaveEngineParts()) return;
+            if (!_pluginConfig.CanHaveEngineParts())
+                return;
 
-            foreach (var module in car.AttachedModuleEntities)
+            foreach (var child in car.children)
             {
-                var engineModule = module as VehicleModuleEngine;
-                if (engineModule != null)
-                {
-                    var engineStorage = engineModule.GetContainer() as EngineStorage;
-                    if (engineStorage != null)
-                    {
-                        AddPartsToEngineStorage(engineStorage);
-                        engineModule.RefreshPerformanceStats(engineStorage);
-                    }
-                }
+                var engineModule = child as VehicleModuleEngine;
+                if (engineModule == null)
+                    continue;
+
+                var engineStorage = engineModule.GetContainer() as EngineStorage;
+                if (engineStorage == null || !engineStorage.inventory.IsEmpty())
+                    continue;
+
+                AddPartsToEngineStorage(engineStorage);
+                engineModule.RefreshPerformanceStats(engineStorage);
             }
         }
 
         private void AddPartsToEngineStorage(EngineStorage engineStorage)
         {
-            if (engineStorage.inventory == null) return;
+            if (engineStorage.inventory == null)
+                return;
 
             var inventory = engineStorage.inventory;
             for (var i = 0; i < inventory.capacity; i++)
             {
                 // Do nothing if there is an existing engine part
                 var item = inventory.GetSlot(i);
-                if (item != null) continue;
+                if (item != null)
+                    continue;
 
-                var tier = pluginConfig.GetPossiblyRandomEnginePartTier();
+                var tier = _pluginConfig.GetPossiblyRandomEnginePartTier();
                 if (tier > 0)
+                {
                     TryAddEngineItem(engineStorage, i, tier);
+                }
             }
         }
 
         private bool TryAddEngineItem(EngineStorage engineStorage, int slot, int tier)
         {
             ItemModEngineItem output;
-            if (!engineStorage.allEngineItems.TryGetItem(tier, engineStorage.slotTypes[slot], out output)) return false;
+            if (!engineStorage.allEngineItems.TryGetItem(tier, engineStorage.slotTypes[slot], out output))
+                return false;
 
             var component = output.GetComponent<ItemDefinition>();
             var item = ItemManager.Create(component);
-            if (item == null) return false;
+            if (item == null)
+                return false;
 
-            item.conditionNormalized = pluginConfig.GetRandomNormalizedPartCondition();
+            item.conditionNormalized = _pluginConfig.GetRandomNormalizedPartCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
         }
@@ -215,7 +262,7 @@ namespace Oxide.Plugins
 
         private Configuration GetDefaultConfig() => new Configuration();
 
-        internal class Configuration : SerializableConfiguration
+        private class Configuration : SerializableConfiguration
         {
             // Deprecated
             [JsonProperty("EnginePartsTier", DefaultValueHandling = DefaultValueHandling.Ignore)]
@@ -292,7 +339,7 @@ namespace Oxide.Plugins
                 : UnityEngine.Mathf.Round(UnityEngine.Random.Range(minConditon, Math.Max(minConditon, maxCondition))) / 100f;
         }
 
-        internal class EnginePartConfiguration
+        private class EnginePartConfiguration
         {
             [JsonProperty("Tier1Chance")]
             public int Tier1Chance = 0;
@@ -310,7 +357,7 @@ namespace Oxide.Plugins
             public float MaxConditionPercent = 100.0f;
         }
 
-        internal class ModulePresetMap
+        private class ModulePresetMap
         {
             [JsonProperty("2Sockets")]
             public ModulePresetConfiguration PresetsFor2Sockets = new ModulePresetConfiguration();
@@ -333,7 +380,7 @@ namespace Oxide.Plugins
             }
         }
 
-        internal class ModulePresetConfiguration
+        private class ModulePresetConfiguration
         {
             [JsonProperty("UseVanillaPresets")]
             public bool UseVanillaPresets = true;
@@ -419,18 +466,16 @@ namespace Oxide.Plugins
             }
         }
 
-        #endregion
-
         #region Configuration Boilerplate
 
-        internal class SerializableConfiguration
+        private class SerializableConfiguration
         {
             public string ToJson() => JsonConvert.SerializeObject(this);
 
             public Dictionary<string, object> ToDictionary() => JsonHelper.Deserialize(ToJson()) as Dictionary<string, object>;
         }
 
-        internal static class JsonHelper
+        private static class JsonHelper
         {
             public static object Deserialize(string json) => ToObject(JToken.Parse(json));
 
@@ -492,27 +537,28 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                pluginConfig = Config.ReadObject<Configuration>();
-                if (pluginConfig == null)
+                _pluginConfig = Config.ReadObject<Configuration>();
+                if (_pluginConfig == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(pluginConfig))
+                if (MaybeUpdateConfig(_pluginConfig))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
                 }
             }
-            catch
+            catch (Exception e)
             {
+                LogError(e.Message);
                 LogWarning($"Configuration file {Name}.json is invalid; using defaults");
                 LoadDefaultConfig();
             }
@@ -521,7 +567,32 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(pluginConfig, true);
+            Config.WriteObject(_pluginConfig, true);
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Localization
+
+        private string GetMessage(string userId, string messageName, params object[] args)
+        {
+            var message = lang.GetMessage(messageName, this, userId);
+            return args.Length > 0 ? string.Format(message, args) : message;
+        }
+
+        private class Lang
+        {
+            public const string FillSuccess = "Fill.Success";
+        }
+
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                [Lang.FillSuccess] = "Processed {0} cars.",
+            }, this, "en");
         }
 
         #endregion

@@ -1,17 +1,23 @@
-**Car Spawn Settings** allows modular cars to spawn with configurable modules, health, fuel, and engine parts.
+## Features
 
-Note: This only affects cars that spawn after the plugin loads, not existing cars.
+Allows modular cars to **spawn** with configurable modules, health, fuel, and engine parts.
 
-## Recommended related plugins
+## Related compatible plugins
 
-- [Auto Engine Parts](https://umod.org/plugins/auto-engine-parts) -- Automatically fills engine modules with parts and prevents players from removing them
-  - When configuring Auto Engine Parts to apply to all cars, it's recommended to disable the engine parts options in Car Spawn Settings since they will be overriden anyway
-- [No Engine Parts](https://umod.org/plugins/no-engine-parts) -- Allows car engines to work without engine parts
-  - A great way to use this in conjunction with Car Spawn Settings is to allow cars with incomplete engine part sets to be driven but with reduced stats
+- [Auto Engine Parts](https://umod.org/plugins/auto-engine-parts) -- Automatically fills engine modules with parts and prevents players from removing them.
+  - When configuring Auto Engine Parts to apply to all cars, it's recommended to disable the engine parts options in Car Spawn Settings since they will be overriden anyway.
+- [No Engine Parts](https://umod.org/plugins/no-engine-parts) -- Allows car engines to work without engine parts.
+  - A great way to use this in conjunction with Car Spawn Settings is to allow cars with incomplete engine part sets to be driven but with reduced stats.
+
+## Commands
+
+- `carspawnsettings.fillcars` -- (Admin command only) Adds fuel and engine parts to existing cars, according to the configuration of the plugin. This is intended to be used only during first time installation, to update cars that spawned before the plugin loaded.
+  - Tip: You can also run the `carstats` command to see the status of all cars in the server.
 
 ## Configuration
 
 Default configuration (vanilla equivalent):
+
 ```json
 {
   "EngineParts": {
@@ -127,6 +133,21 @@ Based on vanilla settings and loot tables. Overall 35.5% chance for engine parts
   "MaxHealthPercent": 50.0,
 ```
 
+## FAQ
+
+#### How can I respawn all cars?
+
+One way is to temporarily increase car decay to get them to all despawn. The following steps can guide you through that.
+
+1. Run the command `modularcar.population` and take note of its value.
+2. Run the command `modularcar.outsidedecayminutes` and take note of its value.
+3. Run the command `modularcar.population 0` to temporarily prevent cars from respawning.
+4. Run the command `modularcar.outsidedecayminutes 1` to significantly increase car decay.
+5. Wait 12 minutes. During this time, run the `carstats` command to see how many cars there are and their status. All cars should reach 0 health within 2 minutes, then despawn within 10 minutes later. When all the cars are gone, proceed to the next steps.
+6. Run the command `modularcar.outsidedecayminutes X` (replace `X` with the value you saved earlier).
+7. Run the command `modularcar.population X` (replace `X` with the value you saved earlier).
+8. Wait a few minutes and run the `carstats` command again to verify the result.
+
 ## Plugin compatibility
 
 This plugin may affect cars spawned by other plugins, but the following rules should automatically prevent most conflicts.
@@ -145,7 +166,7 @@ It is recommended that other plugins be resilient to the presence of existing fu
 
 This hook can be used to prevent this plugin from adding fuel or engine parts to specific unowned cars. Not necessary for cars spawned as a chassis or with an explicit `OwnerID`.
 
-- Called some time after a modular car is spawned (on next tick or later). This delay is a requirement so that module entities can spawn, but this also gives other plugins plenty of time to save a reference to the car they spawned in case they want to check for it in the hook method.
+- Called some time after a modular car has spawned (on next tick or later).
 - Returning `false` will prevent this plugin from adding fuel or engine parts.
 - Returning `null` will result in the default behavior.
 
