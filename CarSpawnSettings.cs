@@ -11,7 +11,7 @@ using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.1.0")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.2.0")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
@@ -20,7 +20,7 @@ namespace Oxide.Plugins
         private static CarSpawnSettings pluginInstance;
 
         private Configuration _pluginConfig;
-        private object _boxedFalse = false;
+        private readonly object False = false;
 
         #endregion
 
@@ -42,14 +42,21 @@ namespace Oxide.Plugins
 
         private object OnVehicleModulesAssign(ModularCar car)
         {
-            var presetConfiguration = GetPresetConfigurationForSockets(car.TotalSockets);
-
             var vanillaPresets = car.spawnSettings.configurationOptions;
+            if (vanillaPresets.Length == 1)
+            {
+                // Ignore the car if there's only 1 preset because it's probably a spawnable preset.
+                return null;
+            }
+
+            var presetConfiguration = GetPresetConfigurationForSockets(car.TotalSockets);
             var numCustomPresets = presetConfiguration?.NormalizedPresets.Length ?? 0;
 
             var numTotalPresets = numCustomPresets;
             if (presetConfiguration != null && presetConfiguration.UseVanillaPresets)
+            {
                 numTotalPresets += vanillaPresets.Length;
+            }
 
             if (numTotalPresets > 0)
             {
@@ -57,9 +64,13 @@ namespace Oxide.Plugins
 
                 var randomPresetIndex = UnityEngine.Random.Range(0, numTotalPresets);
                 if (randomPresetIndex < numCustomPresets)
+                {
                     moduleIds = presetConfiguration.NormalizedPresets[randomPresetIndex];
+                }
                 else
+                {
                     moduleIds = VanillaPresetToModuleIds(vanillaPresets[randomPresetIndex - numCustomPresets].socketItemDefs);
+                }
 
                 AddCarModules(car, moduleIds);
             }
@@ -72,7 +83,7 @@ namespace Oxide.Plugins
                 ProcessCar(car);
             });
 
-            return _boxedFalse;
+            return False;
         }
 
         #endregion
