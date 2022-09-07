@@ -56,17 +56,6 @@ Default configuration (vanilla equivalent):
   - `UseVanillaPresets` (`true` or `false`) -- While `true`, vanilla presets will be used in conjunction with any `CustomPresets` you defined. While `false`, only your `CustomPresets` will be used.
   - `CustomPresets` -- List of module presets, where each preset is a list of module item ids or short names for which module items to add. The number `0` represents an empty socket. Item names and ids can be found on the [uMod item list page](https://umod.org/documentation/games/rust/definitions). See below for some examples.
 
-### Legacy options
-
-These options were introduced in a previous version. They still work for backwards compatibility.
-
-- `EnginePartsTier` (`0` - `3`) -- The quality of engine parts to add to all of the car's engine modules when it spawns.
-  - When 0 or not present, the `EngineParts.Tier*Chance` options will be used instead.
-- `FuelAmount` -- The amount of low grade fuel to put in the car's fuel tank when it spawns (`-1` for max stack size).
-  - When 0 or not present, the `MinFuelAmount` and `MaxFuelAmount` will be used instead.
-- `HealthPercentage` (`0` - `100`) -- The minimum health percentage that each module should be set to when the car spawns (`-1` to not alter health).
-  - When -1 or not present, the `MinHealthPercent` and `MaxHealthPercent` will be used instead.
-
 ### Example module presets
 
 ```json
