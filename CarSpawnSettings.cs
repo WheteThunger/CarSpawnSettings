@@ -4,23 +4,21 @@ using Newtonsoft.Json.Serialization;
 using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using Oxide.Core;
 using Rust.Modular;
 
 namespace Oxide.Plugins
 {
-    [Info("Car Spawn Settings", "WhiteThunder", "2.2.0")]
+    [Info("Car Spawn Settings", "WhiteThunder", "2.3.0")]
     [Description("Allows modular cars to spawn with configurable modules, health, fuel, and engine parts.")]
     internal class CarSpawnSettings : CovalencePlugin
     {
         #region Fields
 
-        private static CarSpawnSettings pluginInstance;
-
-        private Configuration _pluginConfig;
         private readonly object False = false;
+        private Configuration _pluginConfig;
+        private VanillaPresetCache _vanillaPresetCache = new VanillaPresetCache();
 
         #endregion
 
@@ -28,16 +26,9 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            pluginInstance = this;
-
             // Make sure presets are ready as soon as possible
             // Cars can spawn while generating a new map before OnServerInitialized()
-            _pluginConfig.ModulePresetMap.ParseAndValidatePresets();
-        }
-
-        private void Unload()
-        {
-            pluginInstance = null;
+            _pluginConfig.Init(this);
         }
 
         private object OnVehicleModulesAssign(ModularCar car)
@@ -49,8 +40,8 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            var presetConfiguration = GetPresetConfigurationForSockets(car.TotalSockets);
-            var numCustomPresets = presetConfiguration?.NormalizedPresets.Length ?? 0;
+            var presetConfiguration = _pluginConfig.ModulePresetMap.GetPresetConfigurationForSockets(car.TotalSockets);
+            var numCustomPresets = presetConfiguration?.CustomPresets.Length ?? 0;
 
             var numTotalPresets = numCustomPresets;
             if (presetConfiguration != null && presetConfiguration.UseVanillaPresets)
@@ -60,19 +51,21 @@ namespace Oxide.Plugins
 
             if (numTotalPresets > 0)
             {
-                int[] moduleIds;
+                IList<IModuleDefinition> moduleDefinitions;
 
                 var randomPresetIndex = UnityEngine.Random.Range(0, numTotalPresets);
                 if (randomPresetIndex < numCustomPresets)
                 {
-                    moduleIds = presetConfiguration.NormalizedPresets[randomPresetIndex];
+                    moduleDefinitions = presetConfiguration.CustomPresets[randomPresetIndex];
                 }
                 else
                 {
-                    moduleIds = VanillaPresetToModuleIds(vanillaPresets[randomPresetIndex - numCustomPresets].socketItemDefs);
+                    moduleDefinitions = _vanillaPresetCache.GetModulePreset(
+                        vanillaPresets[randomPresetIndex - numCustomPresets]
+                    );
                 }
 
-                AddCarModules(car, moduleIds);
+                AddCarModules(car, moduleDefinitions);
             }
 
             NextTick(() =>
@@ -129,63 +122,29 @@ namespace Oxide.Plugins
             BootstrapAfterModules(car);
         }
 
-        private ModulePresetConfiguration GetPresetConfigurationForSockets(int totalSockets)
+        private void AddCarModules(ModularCar car, IList<IModuleDefinition> modulePreset)
         {
-            if (totalSockets == 4)
-                return _pluginConfig.ModulePresetMap.PresetsFor4Sockets;
-            else if (totalSockets == 3)
-                return _pluginConfig.ModulePresetMap.PresetsFor3Sockets;
-            else if (totalSockets == 2)
-                return _pluginConfig.ModulePresetMap.PresetsFor2Sockets;
-            else
-                return null;
-        }
-
-        private int[] VanillaPresetToModuleIds(ItemModVehicleModule[] modules)
-        {
-            var moduleIds = new List<int>();
-
-            foreach (var module in modules)
+            for (int i = 0; i < car.TotalSockets && i < modulePreset.Count; i++)
             {
-                if (module == null)
+                var moduleDefinition = modulePreset[i];
+                var existingItem = car.Inventory.ModuleContainer.GetSlot(i);
+                if (existingItem != null)
                     continue;
 
-                var itemDefinition = module.GetComponent<ItemDefinition>();
-                if (itemDefinition == null)
+                var moduleItem = moduleDefinition.Create();
+                if (moduleItem == null)
                     continue;
 
-                moduleIds.Add(itemDefinition.itemid);
+                moduleItem.conditionNormalized = _pluginConfig.RandomizeModuleCondition();
 
-                for (var i = 0; i < module.SocketsTaken - 1; i++)
+                if (!car.TryAddModule(moduleItem, i))
                 {
-                    moduleIds.Add(0);
+                    moduleItem.Remove();
+                    break;
                 }
-            }
 
-            return moduleIds.ToArray();
-        }
-
-        private void AddCarModules(ModularCar car, int[] moduleIDs)
-        {
-            for (int socketIndex = 0; socketIndex < car.TotalSockets && socketIndex < moduleIDs.Length; socketIndex++)
-            {
-                var desiredItemID = moduleIDs[socketIndex];
-                var existingItem = car.Inventory.ModuleContainer.GetSlot(socketIndex);
-
-                // We are using 0 to represent an empty socket which we skip
-                if (existingItem == null && desiredItemID != 0)
-                {
-                    var moduleItem = ItemManager.CreateByItemID(desiredItemID);
-                    if (moduleItem != null)
-                    {
-                        moduleItem.conditionNormalized = _pluginConfig.GetRandomNormalizedModuleCondition();
-
-                        if (!car.TryAddModule(moduleItem, socketIndex))
-                        {
-                            moduleItem.Remove();
-                        }
-                    }
-                }
+                // Skip ahead if the current module takes multiple sockets.
+                i += moduleDefinition.NumSockets - 1;
             }
         }
 
@@ -197,7 +156,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddFuel(ModularCar car)
         {
-            var fuelAmount = _pluginConfig.GetPossiblyRandomFuelAmount();
+            var fuelAmount = _pluginConfig.RandomizeFuelAmount();
             if (fuelAmount == 0)
                 return;
 
@@ -243,7 +202,7 @@ namespace Oxide.Plugins
                 if (item != null)
                     continue;
 
-                var tier = _pluginConfig.GetPossiblyRandomEnginePartTier();
+                var tier = _pluginConfig.RandomizeEnginePartTier();
                 if (tier > 0)
                 {
                     TryAddEngineItem(engineStorage, i, tier);
@@ -262,9 +221,67 @@ namespace Oxide.Plugins
             if (item == null)
                 return false;
 
-            item.conditionNormalized = _pluginConfig.GetRandomNormalizedPartCondition();
+            item.conditionNormalized = _pluginConfig.RandomizePartCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
+        }
+
+        #endregion
+
+        #region Module Definitions
+
+        private interface IModuleDefinition
+        {
+            Item Create();
+            int NumSockets { get; }
+        }
+
+        private class VanillaModuleDefinition : IModuleDefinition
+        {
+            public int NumSockets { get; private set; }
+
+            private ItemDefinition _itemDefinition;
+
+            public VanillaModuleDefinition(ItemModVehicleModule socketItemDefinition)
+            {
+                NumSockets = socketItemDefinition.SocketsTaken;
+                _itemDefinition = socketItemDefinition.GetComponent<ItemDefinition>();
+            }
+
+            public Item Create()
+            {
+                if ((object)_itemDefinition == null)
+                    return null;
+
+                return ItemManager.Create(_itemDefinition);
+            }
+        }
+
+        private class VanillaPresetCache
+        {
+            private Dictionary<ModularCarPresetConfig, IList<IModuleDefinition>> _cache = new Dictionary<ModularCarPresetConfig, IList<IModuleDefinition>>();
+
+            public IList<IModuleDefinition> GetModulePreset(ModularCarPresetConfig presetConfig)
+            {
+                IList<IModuleDefinition> modules;
+                if (!_cache.TryGetValue(presetConfig, out modules))
+                {
+                    var moduleDefinitionList = new List<IModuleDefinition>();
+
+                    foreach (var socketItemDefinition in presetConfig.socketItemDefs)
+                    {
+                        if (socketItemDefinition == null)
+                            continue;
+
+                        moduleDefinitionList.Add(new VanillaModuleDefinition(socketItemDefinition));
+                    }
+
+                    modules = moduleDefinitionList.ToArray();
+                    _cache[presetConfig] = modules;
+                }
+
+                return modules;
+            }
         }
 
         #endregion
@@ -275,209 +292,338 @@ namespace Oxide.Plugins
 
         private class Configuration : SerializableConfiguration
         {
-            // Deprecated
-            [JsonProperty("EnginePartsTier", DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public int EnginePartsTier = 0;
-
-            // Deprecated
-            [JsonProperty("FuelAmount", DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public int FuelAmount = 0;
-
-            [JsonProperty("EngineParts")]
-            public EnginePartConfiguration EngineParts = new EnginePartConfiguration();
-
-            [JsonProperty("MinFuelAmount")]
-            public int MinFuelAmount = 0;
-
-            [JsonProperty("MaxFuelAmount")]
-            public int MaxFuelAmount = 0;
-
-            [JsonProperty("MinHealthPercent")]
-            public float MinHealthPercent = 15.0f;
-
-            [JsonProperty("MaxHealthPercent")]
-            public float MaxHealthPercent = 50.0f;
-
-            // Deprecated
-            [JsonProperty("HealthPercentage", DefaultValueHandling = DefaultValueHandling.Ignore)]
-            [DefaultValue(-1.0f)]
-            public float HealthPercentage = -1;
-
-            [JsonProperty("ModulePresets")]
-            public ModulePresetMap ModulePresetMap = new ModulePresetMap();
-
-            public float GetRandomNormalizedModuleCondition() =>
-                GetRandomNormalizedCondition(HealthPercentage != -1 ? HealthPercentage : MinHealthPercent, MaxHealthPercent);
-
-            public bool CanHaveEngineParts() =>
-                EnginePartsTier > 0 ||
-                EngineParts.Tier1Chance > 0 ||
-                EngineParts.Tier2Chance > 0 ||
-                EngineParts.Tier3Chance > 0;
-
-            public int GetPossiblyRandomEnginePartTier()
+            [JsonProperty("EnginePartsTier")]
+            private int DeprecatedEnginePartsTier
             {
-                if (EnginePartsTier != 0)
-                    return EnginePartsTier;
-
-                if (EngineParts.Tier3Chance > 0 && UnityEngine.Random.Range(0, 100) < EngineParts.Tier3Chance)
-                    return 3;
-                else if (EngineParts.Tier2Chance > 0 && UnityEngine.Random.Range(0, 100) < EngineParts.Tier2Chance)
-                    return 2;
-                else if (EngineParts.Tier1Chance > 0 && UnityEngine.Random.Range(0, 100) < EngineParts.Tier1Chance)
-                    return 1;
-                else
-                    return 0;
+                set
+                {
+                    if (value == 1)
+                    {
+                        EngineParts.Tier1Chance = 100;
+                    }
+                    else if (value == 2)
+                    {
+                        EngineParts.Tier2Chance = 100;
+                    }
+                    else if (value == 3)
+                    {
+                        EngineParts.Tier3Chance = 100;
+                    }
+                }
             }
 
-            public float GetRandomNormalizedPartCondition() =>
-                GetRandomNormalizedCondition(EngineParts.MinConditionPercent, EngineParts.MaxConditionPercent);
+            [JsonProperty("FuelAmount", DefaultValueHandling = DefaultValueHandling.Ignore)]
+            private int DeprecatedFuelAmount = 0;
 
-            public int GetPossiblyRandomFuelAmount()
+            [JsonProperty("Engine parts")]
+            public EnginePartConfiguration EngineParts = new EnginePartConfiguration();
+            [JsonProperty("EngineParts")]
+            public EnginePartConfiguration DeprecatedEngineParts { set { EngineParts = value; } }
+
+            [JsonProperty("Min fuel amount")]
+            public int MinFuelAmount = 0;
+            [JsonProperty("MinFuelAmount")]
+            public int DeprecatedMinFuelAmount { set { MinFuelAmount = value;} }
+
+            [JsonProperty("Max fuel amount")]
+            public int MaxFuelAmount = 0;
+            [JsonProperty("MaxFuelAmount")]
+            private int DeprecatedMaxFuelAmount { set { MaxFuelAmount = value;} }
+
+            [JsonProperty("Min health percent")]
+            public float MinHealthPercent = 15.0f;
+            [JsonProperty("MinHealthPercent")]
+            private float DeprecatedMinHealthPercent { set { MinHealthPercent = value;} }
+
+            [JsonProperty("Max health percent")]
+            public float MaxHealthPercent = 50.0f;
+            [JsonProperty("MaxHealthPercent")]
+            private float DeprecatedMaxHealthPercent { set { MaxHealthPercent = value;} }
+            [JsonProperty("HealthPercentage")]
+            private float DeprecatedHealthPercentage
             {
-                if (FuelAmount != 0)
-                    return FuelAmount;
+                set
+                {
+                    MinHealthPercent = value;
+                    MaxHealthPercent = value;
+                }
+            }
+
+            [JsonProperty("Module presets")]
+            public ModulePresetMap ModulePresetMap = new ModulePresetMap();
+            [JsonProperty("ModulePresets")]
+            private ModulePresetMap DeprecatedModulePresetMap { set { ModulePresetMap = value; } }
+
+            public void Init(CarSpawnSettings plugin)
+            {
+                ModulePresetMap.Init(plugin);
+            }
+
+            public float RandomizeModuleCondition()
+            {
+                return RandomizeCondition(MinHealthPercent, MaxHealthPercent);
+            }
+
+            public int RandomizeFuelAmount()
+            {
+                if (DeprecatedFuelAmount != 0)
+                    return DeprecatedFuelAmount;
 
                 if (MinFuelAmount == 0 && MaxFuelAmount == 0)
                     return 0;
 
+                if (MinFuelAmount == MaxFuelAmount)
+                    return MinFuelAmount;
+
                 return UnityEngine.Random.Range(MinFuelAmount, MaxFuelAmount + 1);
             }
 
-            public float GetRandomNormalizedCondition(float minConditon, float maxCondition) =>
-                minConditon == 100f
-                ? 1.0f
-                : UnityEngine.Mathf.Round(UnityEngine.Random.Range(minConditon, Math.Max(minConditon, maxCondition))) / 100f;
+            public bool CanHaveEngineParts() =>
+                EngineParts.Tier1Chance > 0
+                || EngineParts.Tier2Chance > 0
+                || EngineParts.Tier3Chance > 0;
+
+            public int RandomizeEnginePartTier()
+            {
+                if (EngineParts.Tier3Chance > 0
+                    && (EngineParts.Tier3Chance >= 100 || UnityEngine.Random.Range(0, 100) < EngineParts.Tier3Chance))
+                    return 3;
+
+                if (EngineParts.Tier2Chance > 0
+                    && (EngineParts.Tier2Chance >= 100 || UnityEngine.Random.Range(0, 100) < EngineParts.Tier2Chance))
+                    return 2;
+
+                if (EngineParts.Tier1Chance > 0
+                    && (EngineParts.Tier1Chance >= 100 || UnityEngine.Random.Range(0, 100) < EngineParts.Tier1Chance))
+                    return 1;
+
+                return 0;
+            }
+
+            public float RandomizePartCondition()
+            {
+                return RandomizeCondition(
+                    EngineParts.MinConditionPercent,
+                    EngineParts.MaxConditionPercent
+                );
+            }
+
+            private float RandomizeCondition(float minPercent, float maxPercent)
+            {
+                if (minPercent >= 100)
+                    return 1;
+
+                return UnityEngine.Mathf.Round(
+                    UnityEngine.Random.Range(minPercent, Math.Max(minPercent, maxPercent))
+                ) / 100f;
+            }
         }
 
+        [JsonObject(MemberSerialization.OptIn)]
         private class EnginePartConfiguration
         {
-            [JsonProperty("Tier1Chance")]
+            [JsonProperty("Tier 1 chance")]
             public int Tier1Chance = 0;
+            [JsonProperty("Tier1Chance")]
+            private int DeprecatedTier1Chance { set { Tier1Chance = value; } }
 
-            [JsonProperty("Tier2Chance")]
+            [JsonProperty("Tier 2 chance")]
             public int Tier2Chance = 0;
+            [JsonProperty("Tier2Chance")]
+            private int DeprecatedTier2Chance { set { Tier2Chance = value; } }
 
-            [JsonProperty("Tier3Chance")]
+            [JsonProperty("Tier 3 chance")]
             public int Tier3Chance = 0;
+            [JsonProperty("Tier3Chance")]
+            private int DeprecatedTier3Chance { set { Tier3Chance = value; } }
 
+            [JsonProperty("Min condition percent")]
+            public float MinConditionPercent = 100f;
             [JsonProperty("MinConditionPercent")]
-            public float MinConditionPercent = 100.0f;
+            private float DeprecatedMinConditionPercent { set { MinConditionPercent = value; } }
 
+            [JsonProperty("Max condition percent")]
+            public float MaxConditionPercent = 100f;
             [JsonProperty("MaxConditionPercent")]
-            public float MaxConditionPercent = 100.0f;
+            private float DeprecatedMaxConditionPercent { set { MaxConditionPercent = value; } }
         }
 
+        [JsonObject(MemberSerialization.OptIn)]
         private class ModulePresetMap
         {
-            [JsonProperty("2Sockets")]
+            [JsonProperty("2 sockets")]
             public ModulePresetConfiguration PresetsFor2Sockets = new ModulePresetConfiguration();
+            [JsonProperty("2Sockets")]
+            private ModulePresetConfiguration DeprecatedPresetsFor2Sockets { set { PresetsFor2Sockets = value; } }
 
-            [JsonProperty("3Sockets")]
+            [JsonProperty("3 sockets")]
             public ModulePresetConfiguration PresetsFor3Sockets = new ModulePresetConfiguration();
+            [JsonProperty("3Sockets")]
+            private ModulePresetConfiguration DeprecatedPresetsFor3Sockets { set { PresetsFor3Sockets = value; } }
 
-            [JsonProperty("4Sockets")]
+            [JsonProperty("4 sockets")]
             public ModulePresetConfiguration PresetsFor4Sockets = new ModulePresetConfiguration();
+            [JsonProperty("4Sockets")]
+            private ModulePresetConfiguration DeprecatedPresetsFor4Sockets { set { PresetsFor4Sockets = value; } }
 
-            public void ParseAndValidatePresets()
+            public void Init(CarSpawnSettings plugin)
             {
-                // ItemManager may not have initialized yet
-                // Safe to call multiple times since it will only initialize once
-                ItemManager.Initialize();
+                PresetsFor2Sockets.Init(plugin);
+                PresetsFor3Sockets.Init(plugin);
+                PresetsFor4Sockets.Init(plugin);
+            }
 
-                PresetsFor2Sockets.ParseAndValidatePresets();
-                PresetsFor3Sockets.ParseAndValidatePresets();
-                PresetsFor4Sockets.ParseAndValidatePresets();
+            public ModulePresetConfiguration GetPresetConfigurationForSockets(int totalSockets)
+            {
+                if (totalSockets == 4)
+                    return PresetsFor4Sockets;
+
+                if (totalSockets == 3)
+                    return PresetsFor3Sockets;
+
+                if (totalSockets == 2)
+                    return PresetsFor2Sockets;
+
+                return null;
+            }
+        }
+
+        [JsonObject(MemberSerialization.OptIn)]
+        private class ModuleDefinition : IModuleDefinition
+        {
+            [JsonProperty("Item short name")]
+            public string ItemShortName;
+
+            [JsonProperty("Item skin ID")]
+            public ulong SkinId;
+
+            [JsonIgnore]
+            public int NumSockets { get; private set; }= 1;
+
+            [JsonIgnore]
+            private ItemDefinition _itemDefinition;
+
+            public void Init(CarSpawnSettings plugin = null)
+            {
+                // Null/empty short name indicates a blank socket between modules.
+                if (string.IsNullOrEmpty(ItemShortName))
+                    return;
+
+                _itemDefinition = ItemManager.FindItemDefinition(ItemShortName);
+                if (_itemDefinition == null)
+                {
+                    plugin?.LogError($"Unrecognized module item short name: {ItemShortName}");
+                    return;
+                }
+
+                var vehicleMod = _itemDefinition.GetComponent<ItemModVehicleModule>();
+                if (vehicleMod == null)
+                {
+                    plugin?.LogError("No vehicle module found for item: {0}", ItemShortName);
+                    _itemDefinition = null;
+                    return;
+                }
+
+                NumSockets = vehicleMod.SocketsTaken;
+            }
+
+            public Item Create()
+            {
+                if ((object)_itemDefinition == null)
+                    return null;
+
+                return ItemManager.Create(_itemDefinition, 1, SkinId);
             }
         }
 
         private class ModulePresetConfiguration
         {
-            [JsonProperty("UseVanillaPresets")]
+            [JsonProperty("Use vanilla presets")]
             public bool UseVanillaPresets = true;
+            [JsonProperty("UseVanillaPresets")]
+            private bool DeprecatedUseVanillaPresets { set { UseVanillaPresets = value; } }
 
+            [JsonProperty("Custom presets")]
+            public ModuleDefinition[][] CustomPresets = new ModuleDefinition[0][];
             [JsonProperty("CustomPresets")]
-            public object[][] CustomPresets = new object[0][];
+            private object[][] DeprecatedCustomPresets { set { CustomPresets = ParseLegacyPresets(value); } }
 
-            [JsonIgnore]
-            public int[][] NormalizedPresets = new int[0][];
-
-            public void ParseAndValidatePresets()
+            public void Init(CarSpawnSettings plugin)
             {
-                var presets = new List<int[]>();
-                foreach (var presetModules in CustomPresets)
+                foreach (var presetList in CustomPresets)
                 {
-                    var moduleIds = ParseModules(presetModules);
-                    if (moduleIds.Length > 0)
-                        presets.Add(moduleIds);
+                    foreach (var moduleDefinition in presetList)
+                    {
+                        moduleDefinition.Init(plugin);
+                    }
                 }
-                NormalizedPresets = presets.ToArray();
             }
 
-            private int[] ParseModules(object[] moduleArray)
+            private ModuleDefinition[][] ParseLegacyPresets(object[][] legacyPresetList)
             {
-                var moduleIDList = new List<int>();
+                var presetList = new List<ModuleDefinition[]>();
 
-                foreach (var module in moduleArray)
+                foreach (var moduleIdentifierList in legacyPresetList)
                 {
-                    ItemDefinition itemDef;
-
-                    if (module is int || module is long)
+                    var modulePreset = new List<ModuleDefinition>();
+                    foreach (var moduleIdentifier in moduleIdentifierList)
                     {
-                        var moduleInt = module is long ? Convert.ToInt32((long)module) : (int)module;
-                        if (moduleInt == 0)
-                        {
-                            moduleIDList.Add(0);
-                            continue;
-                        }
-                        itemDef = ItemManager.FindItemDefinition(moduleInt);
+                        modulePreset.Add(ParseLegacyModuleDefinition(moduleIdentifier));
                     }
-                    else if (module is string)
-                    {
-                        int parsedItemId;
-                        if (int.TryParse(module as string, out parsedItemId))
-                        {
-                            if (parsedItemId == 0)
-                            {
-                                moduleIDList.Add(0);
-                                continue;
-                            }
-                            itemDef = ItemManager.FindItemDefinition(parsedItemId);
-                        }
-                        else
-                            itemDef = ItemManager.FindItemDefinition(module as string);
-                    }
-                    else
-                    {
-                        pluginInstance.LogWarning("Unable to parse module id or name: '{0}'", module);
-                        continue;
-                    }
-
-                    if (itemDef == null)
-                    {
-                        pluginInstance.LogWarning("No item definition found for: '{0}'", module);
-                        continue;
-                    }
-
-                    var vehicleModule = itemDef.GetComponent<ItemModVehicleModule>();
-                    if (vehicleModule == null)
-                    {
-                        pluginInstance.LogWarning("No vehicle module found for item: '{0}'", module);
-                        continue;
-                    }
-
-                    moduleIDList.Add(itemDef.itemid);
-
-                    // Normalize module IDs by adding 0s after the module if it takes multiple sockets
-                    for (var i = 0; i < vehicleModule.SocketsTaken - 1; i++)
-                        moduleIDList.Add(0);
+                    presetList.Add(modulePreset.ToArray());
                 }
 
-                return moduleIDList.ToArray();
+                return presetList.ToArray();
+            }
+
+            private ModuleDefinition ParseLegacyModuleDefinition(object moduleIdentifier)
+            {
+                if (moduleIdentifier is int || moduleIdentifier is long)
+                {
+                    var moduleId = moduleIdentifier is long
+                        ? Convert.ToInt32((long)moduleIdentifier)
+                        : (int)moduleIdentifier;
+
+                    if (moduleId == 0)
+                        return new ModuleDefinition();
+
+                    var itemDefinition = ItemManager.FindItemDefinition(moduleId);
+                    if (itemDefinition == null)
+                        return new ModuleDefinition();
+
+                    return new ModuleDefinition
+                    {
+                        ItemShortName = itemDefinition.shortname,
+                    };
+                }
+
+                var moduleString = moduleIdentifier as string;
+                if (moduleString != null)
+                {
+                    ItemDefinition itemDefinition;
+
+                    int parsedItemId;
+                    if (int.TryParse(moduleString, out parsedItemId))
+                    {
+                        if (parsedItemId == 0)
+                            return new ModuleDefinition();
+
+                        itemDefinition = ItemManager.FindItemDefinition(parsedItemId);
+                        if (itemDefinition == null)
+                            return new ModuleDefinition();
+                    }
+
+                    return new ModuleDefinition
+                    {
+                        ItemShortName = moduleString,
+                    };
+                }
+
+                return new ModuleDefinition();
             }
         }
 
-        #region Configuration Boilerplate
+        #region Configuration Helpers
 
         private class SerializableConfiguration
         {
