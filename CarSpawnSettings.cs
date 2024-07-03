@@ -17,8 +17,8 @@ namespace Oxide.Plugins
         #region Fields
 
         private readonly object False = false;
-        private Configuration _pluginConfig;
-        private VanillaPresetCache _vanillaPresetCache = new VanillaPresetCache();
+        private Configuration _config;
+        private VanillaPresetCache _vanillaPresetCache = new();
 
         #endregion
 
@@ -28,7 +28,7 @@ namespace Oxide.Plugins
         {
             // Make sure presets are ready as soon as possible
             // Cars can spawn while generating a new map before OnServerInitialized()
-            _pluginConfig.Init(this);
+            _config.Init(this);
         }
 
         private object OnVehicleModulesAssign(ModularCar car)
@@ -40,11 +40,11 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            var presetConfiguration = _pluginConfig.ModulePresetMap.GetPresetConfigurationForSockets(car.TotalSockets);
+            var presetConfiguration = _config.ModulePresetMap.GetPresetConfigurationForSockets(car.TotalSockets);
             var numCustomPresets = presetConfiguration?.CustomPresets.Length ?? 0;
 
             var numTotalPresets = numCustomPresets;
-            if (presetConfiguration != null && presetConfiguration.UseVanillaPresets)
+            if (presetConfiguration is { UseVanillaPresets: true })
             {
                 numTotalPresets += vanillaPresets.Length;
             }
@@ -110,8 +110,7 @@ namespace Oxide.Plugins
 
         private bool BootstrapWasBlocked(ModularCar car)
         {
-            object hookResult = Interface.CallHook("CanBootstrapSpawnedCar", car);
-            return hookResult is bool && (bool)hookResult == false;
+            return Interface.CallHook("CanBootstrapSpawnedCar", car) is false;
         }
 
         private void ProcessCar(ModularCar car)
@@ -124,7 +123,7 @@ namespace Oxide.Plugins
 
         private void AddCarModules(ModularCar car, IList<IModuleDefinition> modulePreset)
         {
-            for (int i = 0; i < car.TotalSockets && i < modulePreset.Count; i++)
+            for (var i = 0; i < car.TotalSockets && i < modulePreset.Count; i++)
             {
                 var moduleDefinition = modulePreset[i];
                 var existingItem = car.Inventory.ModuleContainer.GetSlot(i);
@@ -135,7 +134,7 @@ namespace Oxide.Plugins
                 if (moduleItem == null)
                     continue;
 
-                moduleItem.conditionNormalized = _pluginConfig.RandomizeModuleCondition();
+                moduleItem.conditionNormalized = _config.RandomizeModuleCondition();
 
                 if (!car.TryAddModule(moduleItem, i))
                 {
@@ -156,7 +155,7 @@ namespace Oxide.Plugins
 
         private void MaybeAddFuel(ModularCar car)
         {
-            var fuelAmount = _pluginConfig.RandomizeFuelAmount();
+            var fuelAmount = _config.RandomizeFuelAmount();
             if (fuelAmount == 0)
                 return;
 
@@ -165,16 +164,20 @@ namespace Oxide.Plugins
 
             var fuelContainer = fuelSystem.GetFuelContainer();
             if (fuelAmount < 0)
+            {
                 fuelAmount = fuelContainer.allowedItem.stackable;
+            }
 
             var fuelItem = fuelContainer.inventory.FindItemByItemID(fuelContainer.allowedItem.itemid);
             if (fuelItem == null)
+            {
                 fuelContainer.inventory.AddItem(fuelContainer.allowedItem, fuelAmount);
+            }
         }
 
         private void MaybeAddEngineParts(ModularCar car)
         {
-            if (!_pluginConfig.CanHaveEngineParts())
+            if (!_config.CanHaveEngineParts())
                 return;
 
             foreach (var child in car.children)
@@ -205,7 +208,7 @@ namespace Oxide.Plugins
                 if (item != null)
                     continue;
 
-                var tier = _pluginConfig.RandomizeEnginePartTier();
+                var tier = _config.RandomizeEnginePartTier();
                 if (tier > 0)
                 {
                     TryAddEngineItem(engineStorage, i, tier);
@@ -215,8 +218,7 @@ namespace Oxide.Plugins
 
         private bool TryAddEngineItem(EngineStorage engineStorage, int slot, int tier)
         {
-            ItemModEngineItem output;
-            if (!engineStorage.allEngineItems.TryGetItem(tier, engineStorage.slotTypes[slot], out output))
+            if (!engineStorage.allEngineItems.TryGetItem(tier, engineStorage.slotTypes[slot], out var output))
                 return false;
 
             var component = output.GetComponent<ItemDefinition>();
@@ -224,7 +226,7 @@ namespace Oxide.Plugins
             if (item == null)
                 return false;
 
-            item.conditionNormalized = _pluginConfig.RandomizePartCondition();
+            item.conditionNormalized = _config.RandomizePartCondition();
             item.MoveToContainer(engineStorage.inventory, slot, allowStack: false);
             return true;
         }
@@ -241,7 +243,7 @@ namespace Oxide.Plugins
 
         private class VanillaModuleDefinition : IModuleDefinition
         {
-            public int NumSockets { get; private set; }
+            public int NumSockets { get; }
 
             private ItemDefinition _itemDefinition;
 
@@ -262,12 +264,11 @@ namespace Oxide.Plugins
 
         private class VanillaPresetCache
         {
-            private Dictionary<ModularCarPresetConfig, IList<IModuleDefinition>> _cache = new Dictionary<ModularCarPresetConfig, IList<IModuleDefinition>>();
+            private Dictionary<ModularCarPresetConfig, IList<IModuleDefinition>> _cache = new();
 
             public IList<IModuleDefinition> GetModulePreset(ModularCarPresetConfig presetConfig)
             {
-                IList<IModuleDefinition> modules;
-                if (!_cache.TryGetValue(presetConfig, out modules))
+                if (!_cache.TryGetValue(presetConfig, out var modules))
                 {
                     var moduleDefinitionList = new List<IModuleDefinition>();
 
@@ -291,7 +292,7 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        private Configuration GetDefaultConfig() => new Configuration();
+        private Configuration GetDefaultConfig() => new();
 
         private class Configuration : SerializableConfiguration
         {
@@ -319,29 +320,29 @@ namespace Oxide.Plugins
             private int DeprecatedFuelAmount = 0;
 
             [JsonProperty("Engine parts")]
-            public EnginePartConfiguration EngineParts = new EnginePartConfiguration();
+            public EnginePartConfiguration EngineParts = new();
             [JsonProperty("EngineParts")]
-            public EnginePartConfiguration DeprecatedEngineParts { set { EngineParts = value; } }
+            public EnginePartConfiguration DeprecatedEngineParts { set => EngineParts = value; }
 
             [JsonProperty("Min fuel amount")]
             public int MinFuelAmount = 0;
             [JsonProperty("MinFuelAmount")]
-            public int DeprecatedMinFuelAmount { set { MinFuelAmount = value;} }
+            public int DeprecatedMinFuelAmount { set => MinFuelAmount = value; }
 
             [JsonProperty("Max fuel amount")]
             public int MaxFuelAmount = 0;
             [JsonProperty("MaxFuelAmount")]
-            private int DeprecatedMaxFuelAmount { set { MaxFuelAmount = value;} }
+            private int DeprecatedMaxFuelAmount { set => MaxFuelAmount = value; }
 
             [JsonProperty("Min health percent")]
             public float MinHealthPercent = 15.0f;
             [JsonProperty("MinHealthPercent")]
-            private float DeprecatedMinHealthPercent { set { MinHealthPercent = value;} }
+            private float DeprecatedMinHealthPercent { set => MinHealthPercent = value; }
 
             [JsonProperty("Max health percent")]
             public float MaxHealthPercent = 50.0f;
             [JsonProperty("MaxHealthPercent")]
-            private float DeprecatedMaxHealthPercent { set { MaxHealthPercent = value;} }
+            private float DeprecatedMaxHealthPercent { set => MaxHealthPercent = value; }
             [JsonProperty("HealthPercentage")]
             private float DeprecatedHealthPercentage
             {
@@ -353,9 +354,9 @@ namespace Oxide.Plugins
             }
 
             [JsonProperty("Module presets")]
-            public ModulePresetMap ModulePresetMap = new ModulePresetMap();
+            public ModulePresetMap ModulePresetMap = new();
             [JsonProperty("ModulePresets")]
-            private ModulePresetMap DeprecatedModulePresetMap { set { ModulePresetMap = value; } }
+            private ModulePresetMap DeprecatedModulePresetMap { set => ModulePresetMap = value; }
 
             public void Init(CarSpawnSettings plugin)
             {
@@ -381,10 +382,12 @@ namespace Oxide.Plugins
                 return UnityEngine.Random.Range(MinFuelAmount, MaxFuelAmount + 1);
             }
 
-            public bool CanHaveEngineParts() =>
-                EngineParts.Tier1Chance > 0
-                || EngineParts.Tier2Chance > 0
-                || EngineParts.Tier3Chance > 0;
+            public bool CanHaveEngineParts()
+            {
+                return EngineParts.Tier1Chance > 0
+                       || EngineParts.Tier2Chance > 0
+                       || EngineParts.Tier3Chance > 0;
+            }
 
             public int RandomizeEnginePartTier()
             {
@@ -428,46 +431,46 @@ namespace Oxide.Plugins
             [JsonProperty("Tier 1 chance")]
             public int Tier1Chance = 0;
             [JsonProperty("Tier1Chance")]
-            private int DeprecatedTier1Chance { set { Tier1Chance = value; } }
+            private int DeprecatedTier1Chance { set => Tier1Chance = value; }
 
             [JsonProperty("Tier 2 chance")]
             public int Tier2Chance = 0;
             [JsonProperty("Tier2Chance")]
-            private int DeprecatedTier2Chance { set { Tier2Chance = value; } }
+            private int DeprecatedTier2Chance { set => Tier2Chance = value; }
 
             [JsonProperty("Tier 3 chance")]
             public int Tier3Chance = 0;
             [JsonProperty("Tier3Chance")]
-            private int DeprecatedTier3Chance { set { Tier3Chance = value; } }
+            private int DeprecatedTier3Chance { set => Tier3Chance = value; }
 
             [JsonProperty("Min condition percent")]
             public float MinConditionPercent = 100f;
             [JsonProperty("MinConditionPercent")]
-            private float DeprecatedMinConditionPercent { set { MinConditionPercent = value; } }
+            private float DeprecatedMinConditionPercent { set => MinConditionPercent = value; }
 
             [JsonProperty("Max condition percent")]
             public float MaxConditionPercent = 100f;
             [JsonProperty("MaxConditionPercent")]
-            private float DeprecatedMaxConditionPercent { set { MaxConditionPercent = value; } }
+            private float DeprecatedMaxConditionPercent { set => MaxConditionPercent = value; }
         }
 
         [JsonObject(MemberSerialization.OptIn)]
         private class ModulePresetMap
         {
             [JsonProperty("2 sockets")]
-            public ModulePresetConfiguration PresetsFor2Sockets = new ModulePresetConfiguration();
+            public ModulePresetConfiguration PresetsFor2Sockets = new();
             [JsonProperty("2Sockets")]
-            private ModulePresetConfiguration DeprecatedPresetsFor2Sockets { set { PresetsFor2Sockets = value; } }
+            private ModulePresetConfiguration DeprecatedPresetsFor2Sockets { set => PresetsFor2Sockets = value; }
 
             [JsonProperty("3 sockets")]
-            public ModulePresetConfiguration PresetsFor3Sockets = new ModulePresetConfiguration();
+            public ModulePresetConfiguration PresetsFor3Sockets = new();
             [JsonProperty("3Sockets")]
-            private ModulePresetConfiguration DeprecatedPresetsFor3Sockets { set { PresetsFor3Sockets = value; } }
+            private ModulePresetConfiguration DeprecatedPresetsFor3Sockets { set => PresetsFor3Sockets = value; }
 
             [JsonProperty("4 sockets")]
-            public ModulePresetConfiguration PresetsFor4Sockets = new ModulePresetConfiguration();
+            public ModulePresetConfiguration PresetsFor4Sockets = new();
             [JsonProperty("4Sockets")]
-            private ModulePresetConfiguration DeprecatedPresetsFor4Sockets { set { PresetsFor4Sockets = value; } }
+            private ModulePresetConfiguration DeprecatedPresetsFor4Sockets { set => PresetsFor4Sockets = value; }
 
             public void Init(CarSpawnSettings plugin)
             {
@@ -544,12 +547,12 @@ namespace Oxide.Plugins
             [JsonProperty("Use vanilla presets")]
             public bool UseVanillaPresets = true;
             [JsonProperty("UseVanillaPresets")]
-            private bool DeprecatedUseVanillaPresets { set { UseVanillaPresets = value; } }
+            private bool DeprecatedUseVanillaPresets { set => UseVanillaPresets = value; }
 
             [JsonProperty("Custom presets")]
-            public ModuleDefinition[][] CustomPresets = new ModuleDefinition[0][];
+            public ModuleDefinition[][] CustomPresets = Array.Empty<ModuleDefinition[]>();
             [JsonProperty("CustomPresets")]
-            private object[][] DeprecatedCustomPresets { set { CustomPresets = ParseLegacyPresets(value); } }
+            private object[][] DeprecatedCustomPresets { set => CustomPresets = ParseLegacyPresets(value); }
 
             public void Init(CarSpawnSettings plugin)
             {
@@ -581,10 +584,10 @@ namespace Oxide.Plugins
 
             private ModuleDefinition ParseLegacyModuleDefinition(object moduleIdentifier)
             {
-                if (moduleIdentifier is int || moduleIdentifier is long)
+                if (moduleIdentifier is int or long)
                 {
-                    var moduleId = moduleIdentifier is long
-                        ? Convert.ToInt32((long)moduleIdentifier)
+                    var moduleId = moduleIdentifier is long identifier
+                        ? Convert.ToInt32(identifier)
                         : (int)moduleIdentifier;
 
                     if (moduleId == 0)
@@ -600,18 +603,14 @@ namespace Oxide.Plugins
                     };
                 }
 
-                var moduleString = moduleIdentifier as string;
-                if (moduleString != null)
+                if (moduleIdentifier is string moduleString)
                 {
-                    ItemDefinition itemDefinition;
-
-                    int parsedItemId;
-                    if (int.TryParse(moduleString, out parsedItemId))
+                    if (int.TryParse(moduleString, out var parsedItemId))
                     {
                         if (parsedItemId == 0)
                             return new ModuleDefinition();
 
-                        itemDefinition = ItemManager.FindItemDefinition(parsedItemId);
+                        var itemDefinition = ItemManager.FindItemDefinition(parsedItemId);
                         if (itemDefinition == null)
                             return new ModuleDefinition();
                     }
@@ -666,17 +665,14 @@ namespace Oxide.Plugins
 
         private bool MaybeUpdateConfigDict(Dictionary<string, object> currentWithDefaults, Dictionary<string, object> currentRaw)
         {
-            bool changed = false;
+            var changed = false;
 
             foreach (var key in currentWithDefaults.Keys)
             {
-                object currentRawValue;
-                if (currentRaw.TryGetValue(key, out currentRawValue))
+                if (currentRaw.TryGetValue(key, out var currentRawValue))
                 {
-                    var defaultDictValue = currentWithDefaults[key] as Dictionary<string, object>;
                     var currentDictValue = currentRawValue as Dictionary<string, object>;
-
-                    if (defaultDictValue != null)
+                    if (currentWithDefaults[key] is Dictionary<string, object> defaultDictValue)
                     {
                         if (currentDictValue == null)
                         {
@@ -697,20 +693,20 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                _pluginConfig = Config.ReadObject<Configuration>();
-                if (_pluginConfig == null)
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(_pluginConfig))
+                if (MaybeUpdateConfig(_config))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
@@ -727,7 +723,7 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(_pluginConfig, true);
+            Config.WriteObject(_config, true);
         }
 
         #endregion
@@ -742,7 +738,7 @@ namespace Oxide.Plugins
             return args.Length > 0 ? string.Format(message, args) : message;
         }
 
-        private class Lang
+        private static class Lang
         {
             public const string FillSuccess = "Fill.Success";
         }
